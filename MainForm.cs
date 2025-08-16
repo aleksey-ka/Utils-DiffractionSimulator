@@ -45,80 +45,11 @@ namespace DiffractionSimulator
         private void UpdateApertureMask()
         {
             string selectedShape = apertureShapeComboBox.SelectedItem?.ToString() ?? "Circular";
+            double D_value = (double)D_numericUpDown.Value;
+            double obstructionRatio = (double)obstructionRatioNumericUpDown.Value;
             
-            if (selectedShape == "Circular with obstr.")
-            {
-                // Create circular aperture with central obstruction
-                double D_value = (double)D_numericUpDown.Value;
-                double obstructionRatio = (double)obstructionRatioNumericUpDown.Value / 100.0; // Convert percentage to ratio
-                double aperturePixelSize = D_value / ARRAY_SIZE; // mm per pixel in aperture
-                double outerRadius = D_value / 2.0; // outer radius in mm
-                double innerRadius = (D_value * obstructionRatio) / 2.0; // inner radius (obstruction) in mm - 30% of diameter
-                double centerX = ARRAY_SIZE / 2.0;
-                double centerY = ARRAY_SIZE / 2.0;
-                
-                for (int i = 0; i < ARRAY_SIZE; i++)
-                {
-                    for (int j = 0; j < ARRAY_SIZE; j++)
-                    {
-                        // Convert pixel coordinates to physical coordinates (mm)
-                        double x = (i - centerX) * aperturePixelSize;
-                        double y = (j - centerY) * aperturePixelSize;
-                        
-                        // Check if point is within annular region (between inner and outer radius)
-                        double distanceFromCenter = Math.Sqrt(x * x + y * y);
-                        if (distanceFromCenter <= outerRadius && distanceFromCenter >= innerRadius)
-                        {
-                            appertureMask[i, j] = 1.0f;
-                        }
-                        else
-                        {
-                            appertureMask[i, j] = 0.0f;
-                        }
-                    }
-                }
-            }
-            else if (selectedShape == "Circular")
-            {
-                // Create circular aperture
-                double D_value = (double)D_numericUpDown.Value;
-                double aperturePixelSize = D_value / ARRAY_SIZE; // mm per pixel in aperture
-                double radius = D_value / 2.0; // radius in mm
-                double centerX = ARRAY_SIZE / 2.0;
-                double centerY = ARRAY_SIZE / 2.0;
-                
-                for (int i = 0; i < ARRAY_SIZE; i++)
-                {
-                    for (int j = 0; j < ARRAY_SIZE; j++)
-                    {
-                        // Convert pixel coordinates to physical coordinates (mm)
-                        double x = (i - centerX) * aperturePixelSize;
-                        double y = (j - centerY) * aperturePixelSize;
-                        
-                        // Check if point is within circle
-                        double distanceFromCenter = Math.Sqrt(x * x + y * y);
-                        if (distanceFromCenter <= radius)
-                        {
-                            appertureMask[i, j] = 1.0f;
-                        }
-                        else
-                        {
-                            appertureMask[i, j] = 0.0f;
-                        }
-                    }
-                }
-            }
-            else
-            {
-                // Default square aperture (uniform)
-                for (int i = 0; i < ARRAY_SIZE; i++)
-                {
-                    for (int j = 0; j < ARRAY_SIZE; j++)
-                    {
-                        appertureMask[i, j] = 1.0f;
-                    }
-                }
-            }
+            // Generate aperture mask using the new class
+            appertureMask = ApertureMaskGenerator.GenerateApertureMask(selectedShape, D_value, obstructionRatio);
             
             // Update obstruction control enabled state
             UpdateObstructionControlState();
@@ -207,95 +138,18 @@ namespace DiffractionSimulator
             double imagePlaneSize_value = (double)imagePlaneSize_numericUpDown.Value;
             int integrationSize = (int)integrationSize_numericUpDown.Value;
             
-            // Calculate physical pixel sizes
-            double aperturePixelSize = D_value / ARRAY_SIZE; // mm per pixel in aperture
-            double imagePixelSize = imagePlaneSize_value / ARRAY_SIZE; // mm per pixel in image plane
-
-            // Center of curvature is at z = f
-            // For a sphere centered at (0, 0, f), the equation is: x² + y² + (z-f)² = f²
-            // Solving for z: z = f - sqrt(f² - x² - y²)
+            // Generate wavefront using the new class
+            appertureDepth = WavefrontGenerator.GenerateSphericalWavefront(D_value, f_value);
             
-            // Calculate wavefront depth for all aperture points
-            for (int i = 0; i < ARRAY_SIZE; i++)
-            {
-                for (int j = 0; j < ARRAY_SIZE; j++)
-                {
-                    // Convert pixel coordinates to physical coordinates (mm)
-                    double x = (i - ARRAY_SIZE / 2.0) * aperturePixelSize;
-                    double y = (j - ARRAY_SIZE / 2.0) * aperturePixelSize;
-                    
-                    // Calculate distance from center of aperture
-                    double rSquared = x * x + y * y;
-                    
-                    // Calculate z position on sphere surface
-                    // z = f - sqrt(f² - r²) where r² = x² + y²
-                    double z = f_value - Math.Sqrt(f_value * f_value - rSquared);
-                    appertureDepth[i, j] = z;
-                }
-            }
-            
-            // Clear image plane array
-            for (int i = 0; i < ARRAY_SIZE; i++)
-            {
-                for (int j = 0; j < ARRAY_SIZE; j++)
-                {
-                    imagePlane[i, j] = 0.0f;
-                }
-            }
-            
-            // Calculate central integration region in image plane
-            int centerStart = ARRAY_SIZE / 2 - integrationSize / 2;
-            int centerEnd = ARRAY_SIZE / 2 + integrationSize / 2;
-            
-            // For each point in the central 11x11 image plane region
-            for (int imgI = centerStart; imgI <= centerEnd; imgI++)
-            {
-                for (int imgJ = centerStart; imgJ <= centerEnd; imgJ++)
-                {
-                    // Convert image plane pixel coordinates to physical coordinates (mm)
-                    double imgX = (imgI - ARRAY_SIZE / 2.0) * imagePixelSize;
-                    double imgY = (imgJ - ARRAY_SIZE / 2.0) * imagePixelSize;
-                    double imgZ = f_value; // Image plane is at z = f
-                    
-                    // Complex field at this image point (real and imaginary parts)
-                    double realPart = 0.0;
-                    double imagPart = 0.0;
-                    
-                    // Integrate over all aperture points
-                    for (int apI = 0; apI < ARRAY_SIZE; apI++)
-                    {
-                        for (int apJ = 0; apJ < ARRAY_SIZE; apJ++)
-                        {
-                            // Convert aperture pixel coordinates to physical coordinates (mm)
-                            double apX = (apI - ARRAY_SIZE / 2.0) * aperturePixelSize;
-                            double apY = (apJ - ARRAY_SIZE / 2.0) * aperturePixelSize;
-                            double apZ = appertureDepth[apI, apJ]; // Z position from wavefront
-                            
-                            // Calculate distance from aperture point to image point
-                            double dx = imgX - apX;
-                            double dy = imgY - apY;
-                            double dz = imgZ - apZ;
-                            double distance = Math.Sqrt(dx * dx + dy * dy + dz * dz);
-                            
-                            // Calculate phase: 2π * distance / λ
-                            double phase = 2.0 * Math.PI * distance / lambda_value;
-                            
-                            // Get amplitude from aperture mask
-                            float amplitude = appertureMask[apI, apJ];
-                            
-                            // Add contribution to complex field
-                            realPart += amplitude * Math.Cos(phase);
-                            imagPart += amplitude * Math.Sin(phase);
-                        }
-                    }
-                    
-                    // Calculate intensity (square of complex field magnitude)
-                    float intensity = (float)(realPart * realPart + imagPart * imagPart);
-                    
-                    // Store in image plane array
-                    imagePlane[imgI, imgJ] = intensity;
-                }
-            }
+            // Calculate diffraction pattern using the new class
+            imagePlane = DiffractionCalculator.CalculateDiffractionPattern(
+                appertureMask, 
+                appertureDepth, 
+                D_value, 
+                f_value, 
+                lambda_value, 
+                imagePlaneSize_value, 
+                integrationSize);
         }
         
         private void GammaCorrectedViewCheckBox_CheckedChanged(object sender, EventArgs e)
