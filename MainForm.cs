@@ -129,129 +129,18 @@ namespace DiffractionSimulator
                 return; // Nothing to draw if mask is not initialized
             }
             
-            // Use fixed size for grid generation - sampling should not affect grid appearance
-            int fixedArraySize = ARRAY_SIZE; // Always use the display resolution for grid
-            
-            // Calculate the center of the aperture (exact center)
-            double centerApertureI = (fixedArraySize - 1) / 2.0;
-            double centerApertureJ = (fixedArraySize - 1) / 2.0;
-            
-            // Find the illuminated area bounds to determine optimal grid spacing
-            var illuminatedBounds = FindIlluminatedBounds(fixedArraySize);
-            if (illuminatedBounds == null) return;
-            
-            // Create a grid with a node exactly at the center of the aperture
-            int gridSize = 13; // Use odd number to ensure center node (changed from 12 to 13)
-            
-            // Calculate grid spacing based on the actual illuminated area size
-            // Use the smaller dimension to ensure we don't have gaps
-            double minDimension = Math.Min(illuminatedBounds.Value.width, illuminatedBounds.Value.height);
-            double gridSpacing = minDimension / (gridSize - 1); // Ensure edge-to-edge coverage
-            
-            // Calculate grid starting position to place center node exactly at aperture center
-            // With odd gridSize, the center node will be at index (gridSize-1)/2
-            int centerIndex = (gridSize - 1) / 2;
-            double gridStartI = centerApertureI - centerIndex * gridSpacing;
-            double gridStartJ = centerApertureJ - centerIndex * gridSpacing;
-            
-            // Collect all nodes for triangulation (including boundary nodes)
-            List<(double i, double j, bool isBoundary)> allNodes = new List<(double i, double j, bool isBoundary)>();
-            
-            // Draw regular grid dots (green) with better coverage
-            for (int gridI = 0; gridI < gridSize; gridI++)
-            {
-                for (int gridJ = 0; gridJ < gridSize; gridJ++)
-                {
-                    double gridI_pos = gridStartI + gridI * gridSpacing;
-                    double gridJ_pos = gridStartJ + gridJ * gridSpacing;
-                    
-                    // Only draw if this exact grid position is illuminated (no fallback searching)
-                    if (IsPositionIlluminatedDirect(gridI_pos, gridJ_pos, fixedArraySize))
-                    {
-                        DrawDotAtPosition(bitmap, gridI_pos, gridJ_pos, fixedArraySize, Color.Green);
-                        allNodes.Add((gridI_pos, gridJ_pos, false));
-                    }
-                    // If position is not illuminated, skip it entirely - no fallback searching
-                }
-            }
-            
-            // Add additional boundary nodes around the illuminated area and include them in triangulation
-            var additionalBoundaryNodes = AddBoundaryNodes(bitmap, fixedArraySize, centerApertureI, centerApertureJ, illuminatedBounds.Value);
-            allNodes.AddRange(additionalBoundaryNodes);
-            
-            // Generate and draw the triangular mesh using all nodes (including boundary nodes)
-            if (allNodes.Count >= 3)
-            {
-                GenerateAndDrawTriangularMesh(bitmap, fixedArraySize, allNodes);
-            }
-        }
-        
-        private (double centerI, double centerJ, double width, double height)? FindIlluminatedBounds(int arraySize)
-        {
-            // Use direct mathematical calculation instead of mask scanning
-            // This provides exact bounds regardless of sampling
-            
+            // Get aperture parameters
             string selectedShape = apertureShapeComboBox.SelectedItem?.ToString() ?? "Circular";
             double D_value = (double)D_numericUpDown.Value;
             double obstructionRatio = (double)obstructionRatioNumericUpDown.Value;
             
-            // Calculate physical coordinates
-            double aperturePixelSize = D_value / arraySize; // mm per pixel in aperture
-            double centerI = arraySize / 2.0;
-            double centerJ = arraySize / 2.0;
-            
-            switch (selectedShape)
-            {
-                case "Circular":
-                case "Circular with obstr.":
-                    {
-                        // For circular apertures, the bounds are determined by the outer radius
-                        double radius = D_value / 2.0; // radius in mm
-                        double radiusInPixels = radius / aperturePixelSize;
-                        
-                        double width = radiusInPixels * 2;
-                        double height = radiusInPixels * 2;
-                        
-                        return (centerI, centerJ, width, height);
-                    }
-                    
-                case "Square":
-                default:
-                    {
-                        // For square aperture, use the full array size
-                        return (centerI, centerJ, arraySize, arraySize);
-                    }
-            }
+            // Use the new GridMeshGenerator class
+            GridMeshGenerator.GenerateOrthogonalGrid(bitmap, selectedShape, D_value, obstructionRatio);
         }
         
-        private (double, double)? FindNearestIlluminatedPosition(double targetI, double targetJ, int arraySize)
-        {
-            if (appertureMask == null) return null;
-            
-            // Search in expanding circles around the target position
-            double searchRadius = 0;
-            double maxSearchRadius = 20; // Maximum search radius
-            
-            while (searchRadius <= maxSearchRadius)
-            {
-                // Check positions at current radius
-                for (int angleStep = 0; angleStep < 8; angleStep++) // 8 directions
-                {
-                    double angle = (2.0 * Math.PI * angleStep) / 8.0;
-                    double testI = targetI + searchRadius * Math.Cos(angle);
-                    double testJ = targetJ + searchRadius * Math.Sin(angle);
-                    
-                    if (IsPositionIlluminated(testI, testJ, arraySize))
-                    {
-                        return (testI, testJ);
-                    }
-                }
-                
-                searchRadius += 1.0;
-            }
-            
-            return null; // No illuminated position found within search radius
-        }
+
+        
+
         
         private List<(double i, double j, bool isBoundary)> AddBoundaryNodes(Bitmap bitmap, int arraySize, double centerI, double centerJ, (double centerI, double centerJ, double width, double height) bounds)
         {
@@ -1027,3 +916,4 @@ namespace DiffractionSimulator
         }
     }
 }
+
