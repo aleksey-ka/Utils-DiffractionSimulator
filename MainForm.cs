@@ -272,67 +272,79 @@ namespace DiffractionSimulator
             List<(double i, double j, bool isBoundary)> boundaryNodes = new List<(double i, double j, bool isBoundary)>();
             
             // Add boundary nodes at regular intervals around the illuminated area
-            int numBoundaryNodes = 32; // Increased from 16 to 32 for better coverage
+            int numBoundaryNodes = 48; // Increased for better coverage
             
             for (int i = 0; i < numBoundaryNodes; i++)
             {
                 double angle = (2.0 * Math.PI * i) / numBoundaryNodes;
                 
-                // Start from the center and move outward to find boundary
-                double distance = 0;
-                double maxDistance = Math.Max(bounds.width, bounds.height) / 2.0 + 20; // Increased safety margin
+                // Find the precise boundary position using binary search
+                var boundaryPosition = FindPreciseBoundaryPosition(centerI, centerJ, angle, arraySize);
                 
-                while (distance < maxDistance)
+                if (boundaryPosition.HasValue)
                 {
-                    double testI = centerI + distance * Math.Cos(angle);
-                    double testJ = centerJ + distance * Math.Sin(angle);
-                    
-                    // Check if we've found the boundary
-                    if (!IsPositionIlluminated(testI, testJ, arraySize))
-                    {
-                        // Move back slightly to stay inside illuminated area
-                        distance -= 2.0; // Increased step back for safety
-                        double boundaryI = centerI + distance * Math.Cos(angle);
-                        double boundaryJ = centerJ + distance * Math.Sin(angle);
-                        
-                        // ROBUST SAFETY CHECK: Ensure we're definitely inside illuminated area
-                        if (IsPositionIlluminated(boundaryI, boundaryJ, arraySize))
-                        {
-                            // Additional verification: check surrounding positions to ensure we're not on the very edge
-                            bool isStable = true;
-                            for (int checkAngle = -1; checkAngle <= 1; checkAngle++)
-                            {
-                                for (int checkDist = -1; checkDist <= 1; checkDist++)
-                                {
-                                    if (checkAngle == 0 && checkDist == 0) continue; // Skip center position
-                                    
-                                    double checkI = boundaryI + checkDist * Math.Cos(angle + checkAngle * 0.1);
-                                    double checkJ = boundaryJ + checkDist * Math.Sin(angle + checkAngle * 0.1);
-                                    
-                                    if (!IsPositionIlluminated(checkI, checkJ, arraySize))
-                                    {
-                                        isStable = false;
-                                        break;
-                                    }
-                                }
-                                if (!isStable) break;
-                            }
-                            
-                            // Only draw if the position is stable (surrounded by illuminated pixels)
-                            if (isStable)
-                            {
-                                DrawDotAtPosition(bitmap, boundaryI, boundaryJ, arraySize, Color.Red);
-                                boundaryNodes.Add((boundaryI, boundaryJ, true)); // Boundary node
-                            }
-                        }
-                        break;
-                    }
-                    
-                    distance += 1.0;
+                    DrawDotAtPosition(bitmap, boundaryPosition.Value.Item1, boundaryPosition.Value.Item2, arraySize, Color.Red);
+                    boundaryNodes.Add((boundaryPosition.Value.Item1, boundaryPosition.Value.Item2, true));
                 }
             }
             
             return boundaryNodes;
+        }
+        
+        private (double i, double j)? FindPreciseBoundaryPosition(double centerI, double centerJ, double angle, int arraySize)
+        {
+            // Use binary search to find the precise boundary position
+            double minDistance = 0;
+            double maxDistance = 300; // Start with a large search range
+            
+            // First, find a rough range where the boundary exists
+            double testDistance = 0;
+            while (testDistance < maxDistance)
+            {
+                double testI = centerI + testDistance * Math.Cos(angle);
+                double testJ = centerJ + testDistance * Math.Sin(angle);
+                
+                if (!IsPositionIlluminated(testI, testJ, arraySize))
+                {
+                    maxDistance = testDistance;
+                    break;
+                }
+                testDistance += 10; // Coarse steps first
+            }
+            
+            if (maxDistance >= 300) return null; // No boundary found
+            
+            // Now use binary search for precision
+            double precision = 0.1; // Sub-pixel precision
+            
+            while (maxDistance - minDistance > precision)
+            {
+                double midDistance = (minDistance + maxDistance) / 2.0;
+                double testI = centerI + midDistance * Math.Cos(angle);
+                double testJ = centerJ + midDistance * Math.Sin(angle);
+                
+                if (IsPositionIlluminated(testI, testJ, arraySize))
+                {
+                    minDistance = midDistance; // Point is inside, move outward
+                }
+                else
+                {
+                    maxDistance = midDistance; // Point is outside, move inward
+                }
+            }
+            
+            // Final boundary position (just inside the illuminated area)
+            double finalDistance = minDistance + precision * 0.5; // Ensure we're just inside
+            double boundaryI = centerI + finalDistance * Math.Cos(angle);
+            double boundaryJ = centerJ + finalDistance * Math.Sin(angle);
+            
+            // Verify the final position is illuminated
+            if (IsPositionIlluminated(boundaryI, boundaryJ, arraySize))
+            {
+                return (boundaryI, boundaryJ);
+            }
+            
+            return null;
         }
         
         private void DrawDotAtPosition(Bitmap bitmap, double apertureI, double apertureJ, int arraySize, Color dotColor)
