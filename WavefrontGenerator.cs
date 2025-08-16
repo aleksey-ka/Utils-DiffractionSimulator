@@ -11,25 +11,28 @@ namespace DiffractionSimulator
         /// </summary>
         /// <param name="D">Aperture diameter in mm</param>
         /// <param name="f">Focal length in mm</param>
+        /// <param name="sampling">Sampling factor (0.5 = 2x oversampling, 1.0 = normal, 2.0 = 2x undersampling, 4.0 = 4x undersampling, 8.0 = 8x undersampling, 16.0 = 16x undersampling, 32.0 = 32x undersampling)</param>
         /// <returns>2D array of z-positions representing the wavefront surface</returns>
-        public static double[,] GenerateSphericalWavefront(double D, double f)
+        public static double[,] GenerateSphericalWavefront(double D, double f, double sampling = 1.0)
         {
-            double[,] wavefrontDepth = new double[ARRAY_SIZE, ARRAY_SIZE];
+            // Calculate effective array size based on sampling
+            int effectiveArraySize = (int)(ARRAY_SIZE / sampling);
+            double[,] wavefrontDepth = new double[effectiveArraySize, effectiveArraySize];
             
             // Calculate physical pixel size
-            double aperturePixelSize = D / ARRAY_SIZE; // mm per pixel in aperture
+            double aperturePixelSize = D / effectiveArraySize; // mm per pixel in aperture
             
             // Center of curvature is at z = f
             // For a sphere centered at (0, 0, f), the equation is: x² + y² + (z-f)² = f²
             // Solving for z: z = f - sqrt(f² - x² - y²)
             
-            for (int i = 0; i < ARRAY_SIZE; i++)
+            for (int i = 0; i < effectiveArraySize; i++)
             {
-                for (int j = 0; j < ARRAY_SIZE; j++)
+                for (int j = 0; j < effectiveArraySize; j++)
                 {
                     // Convert pixel coordinates to physical coordinates (mm)
-                    double x = (i - ARRAY_SIZE / 2.0) * aperturePixelSize;
-                    double y = (j - ARRAY_SIZE / 2.0) * aperturePixelSize;
+                    double x = (i - effectiveArraySize / 2.0) * aperturePixelSize;
+                    double y = (j - effectiveArraySize / 2.0) * aperturePixelSize;
                     
                     // Calculate distance from center of aperture
                     double rSquared = x * x + y * y;

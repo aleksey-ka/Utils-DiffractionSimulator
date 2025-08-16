@@ -42,12 +42,16 @@ namespace DiffractionSimulator
             lambda_label = new Label();
             imagePlaneSize_label = new Label();
             integrationSize_label = new Label();
+            sampling_label = new Label();
+            samplingComboBox = new ComboBox();
             apertureShape_label = new Label();
             apertureShapeComboBox = new ComboBox();
             apertureTitle_label = new Label();
             imagePlaneTitle_label = new Label();
             obstructionRatio_label = new Label();
             obstructionRatioNumericUpDown = new NumericUpDown();
+            grid_label = new Label();
+            gridComboBox = new ComboBox();
             ((System.ComponentModel.ISupportInitialize)apperturePictureBox).BeginInit();
             ((System.ComponentModel.ISupportInitialize)imagePlanePictureBox).BeginInit();
             ((System.ComponentModel.ISupportInitialize)D_numericUpDown).BeginInit();
@@ -212,6 +216,41 @@ namespace DiffractionSimulator
             integrationSize_label.Text = "Int. Size";
             integrationSize_label.TextAlign = ContentAlignment.MiddleCenter;
             // 
+            // sampling_label
+            // 
+            sampling_label.AutoSize = true;
+            sampling_label.ForeColor = Color.White;
+            sampling_label.Location = new Point(800, 562);
+            sampling_label.Name = "sampling_label";
+            sampling_label.Size = new Size(60, 15);
+            sampling_label.TabIndex = 14;
+            sampling_label.Text = "Sampling";
+            sampling_label.TextAlign = ContentAlignment.MiddleCenter;
+            // 
+            // grid_label
+            // 
+            grid_label.AutoSize = true;
+            grid_label.ForeColor = Color.White;
+            grid_label.Location = new Point(880, 562);
+            grid_label.Name = "grid_label";
+            grid_label.Size = new Size(60, 15);
+            grid_label.TabIndex = 20;
+            grid_label.Text = "Grid";
+            grid_label.TextAlign = ContentAlignment.MiddleCenter;
+            // 
+            // gridComboBox
+            // 
+            gridComboBox.BackColor = Color.FromArgb(64, 64, 64);
+            gridComboBox.DropDownStyle = ComboBoxStyle.DropDownList;
+            gridComboBox.ForeColor = Color.White;
+            gridComboBox.FormattingEnabled = true;
+            gridComboBox.Items.AddRange(new object[] { "None", "Orthogonal" });
+            gridComboBox.Location = new Point(880, 582);
+            gridComboBox.Name = "gridComboBox";
+            gridComboBox.Size = new Size(80, 23);
+            gridComboBox.TabIndex = 21;
+            gridComboBox.SelectedIndexChanged += GridComboBox_SelectedIndexChanged;
+            // 
             // apertureShape_label
             // 
             apertureShape_label.AutoSize = true;
@@ -235,6 +274,19 @@ namespace DiffractionSimulator
             apertureShapeComboBox.Size = new Size(100, 23);
             apertureShapeComboBox.TabIndex = 15;
             apertureShapeComboBox.SelectedIndexChanged += ApertureShapeComboBox_SelectedIndexChanged;
+            // 
+            // samplingComboBox
+            // 
+            samplingComboBox.BackColor = Color.FromArgb(64, 64, 64);
+            samplingComboBox.DropDownStyle = ComboBoxStyle.DropDownList;
+            samplingComboBox.ForeColor = Color.White;
+            samplingComboBox.FormattingEnabled = true;
+            samplingComboBox.Items.AddRange(new object[] { "0.5", "1.0", "2.0", "4.0", "8.0", "16.0", "32.0" });
+            samplingComboBox.Location = new Point(800, 582);
+            samplingComboBox.Name = "samplingComboBox";
+            samplingComboBox.Size = new Size(60, 23);
+            samplingComboBox.TabIndex = 16;
+            samplingComboBox.SelectedIndexChanged += SamplingComboBox_SelectedIndexChanged;
             // 
             // apertureTitle_label
             // 
@@ -299,6 +351,10 @@ namespace DiffractionSimulator
             Controls.Add(lambda_label);
             Controls.Add(imagePlaneSize_label);
             Controls.Add(integrationSize_label);
+            Controls.Add(sampling_label);
+            Controls.Add(grid_label);
+            Controls.Add(gridComboBox);
+            Controls.Add(samplingComboBox);
             Controls.Add(apertureShape_label);
             Controls.Add(apertureShapeComboBox);
             Controls.Add(apertureTitle_label);
@@ -336,11 +392,15 @@ namespace DiffractionSimulator
         private Label lambda_label;
         private Label imagePlaneSize_label;
         private Label integrationSize_label;
+        private Label sampling_label;
+        private ComboBox samplingComboBox;
         private Label apertureShape_label;
         private ComboBox apertureShapeComboBox;
         private Label apertureTitle_label;
         private Label imagePlaneTitle_label;
         private Label obstructionRatio_label;
         private NumericUpDown obstructionRatioNumericUpDown;
+        private Label grid_label;
+        private ComboBox gridComboBox;
     }
 }
