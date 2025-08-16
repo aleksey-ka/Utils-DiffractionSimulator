@@ -128,23 +128,26 @@ namespace DiffractionSimulator
             }
             
             // Calculate the center of the aperture (exact center)
-            // Note: In the display, i is Y (vertical) and j is X (horizontal)
-            double centerApertureI = (arraySize - 1) / 2.0; // Y center (vertical)
-            double centerApertureJ = (arraySize - 1) / 2.0; // X center (horizontal)
+            double centerApertureI = (arraySize - 1) / 2.0;
+            double centerApertureJ = (arraySize - 1) / 2.0;
             
-            // Create a regular grid centered on the aperture center
-            int gridSize = 8; // 8x8 grid
+            // Find the illuminated area bounds to determine optimal grid spacing
+            var illuminatedBounds = FindIlluminatedBounds(arraySize);
+            if (illuminatedBounds == null) return;
             
-            // Calculate grid spacing to ensure perfect centering
-            // Use (gridSize - 1) to ensure the grid spans exactly from edge to edge
-            double gridSpacing = (double)arraySize / (gridSize + 1);
+            // Create a denser grid that covers the entire illuminated area
+            int gridSize = 12; // Increased from 8 to 12 for better coverage
             
-            // Calculate grid starting position to center it perfectly
-            // Start from the leftmost/topmost position that will center the grid
-            double gridStartI = centerApertureI - ((gridSize - 1) / 2.0) * gridSpacing;
-            double gridStartJ = centerApertureJ - ((gridSize - 1) / 2.0) * gridSpacing;
+            // Calculate grid spacing based on the actual illuminated area size
+            // Use the smaller dimension to ensure we don't have gaps
+            double minDimension = Math.Min(illuminatedBounds.Value.width, illuminatedBounds.Value.height);
+            double gridSpacing = minDimension / (gridSize - 1); // Ensure edge-to-edge coverage
             
-            // Draw regular grid dots (green)
+            // Calculate grid starting position to center it in the illuminated area
+            double gridStartI = illuminatedBounds.Value.centerI - ((gridSize - 1) / 2.0) * gridSpacing;
+            double gridStartJ = illuminatedBounds.Value.centerJ - ((gridSize - 1) / 2.0) * gridSpacing;
+            
+            // Draw regular grid dots (green) with better coverage
             for (int gridI = 0; gridI < gridSize; gridI++)
             {
                 for (int gridJ = 0; gridJ < gridSize; gridJ++)
@@ -152,10 +155,15 @@ namespace DiffractionSimulator
                     double gridI_pos = gridStartI + gridI * gridSpacing;
                     double gridJ_pos = gridStartJ + gridJ * gridSpacing;
                     
-                    // Only draw if this position is illuminated
-                    if (IsPositionIlluminated(gridI_pos, gridJ_pos, arraySize))
+                    // Only draw if this position is illuminated AND not on the boundary
+                    if (IsPositionIlluminated(gridI_pos, gridJ_pos, arraySize) && !IsPositionOnBoundary(gridI_pos, gridJ_pos, arraySize))
                     {
                         DrawDotAtPosition(bitmap, gridI_pos, gridJ_pos, arraySize, Color.Green);
+                    }
+                    else if (IsPositionIlluminated(gridI_pos, gridJ_pos, arraySize))
+                    {
+                        // Position is illuminated but on boundary - draw as red
+                        DrawDotAtPosition(bitmap, gridI_pos, gridJ_pos, arraySize, Color.Red);
                     }
                     else
                     {
@@ -163,14 +171,22 @@ namespace DiffractionSimulator
                         var nearestPosition = FindNearestIlluminatedPosition(gridI_pos, gridJ_pos, arraySize);
                         if (nearestPosition.HasValue)
                         {
-                            DrawDotAtPosition(bitmap, nearestPosition.Value.Item1, nearestPosition.Value.Item2, arraySize, Color.Green);
+                            // Check if the nearest position is on the boundary
+                            if (IsPositionOnBoundary(nearestPosition.Value.Item1, nearestPosition.Value.Item2, arraySize))
+                            {
+                                DrawDotAtPosition(bitmap, nearestPosition.Value.Item1, nearestPosition.Value.Item2, arraySize, Color.Red);
+                            }
+                            else
+                            {
+                                DrawDotAtPosition(bitmap, nearestPosition.Value.Item1, nearestPosition.Value.Item2, arraySize, Color.Green);
+                            }
                         }
                     }
                 }
             }
             
             // Add boundary nodes around the illuminated area
-            AddBoundaryNodes(bitmap, arraySize, centerApertureI, centerApertureJ, (centerApertureI, centerApertureJ, arraySize, arraySize));
+            AddBoundaryNodes(bitmap, arraySize, centerApertureI, centerApertureJ, illuminatedBounds.Value);
         }
         
         private (double centerI, double centerJ, double width, double height)? FindIlluminatedBounds(int arraySize)
@@ -370,6 +386,33 @@ namespace DiffractionSimulator
                               wi * wj * appertureMask[i1, j1];
                 return value > 0.001; // Use small threshold for precision
             }
+        }
+        
+        private bool IsPositionOnBoundary(double i, double j, int arraySize)
+        {
+            if (appertureMask == null) return false;
+            
+            // Check if this position is illuminated
+            if (!IsPositionIlluminated(i, j, arraySize)) return false;
+            
+            // Check if any of the 8 surrounding positions are not illuminated
+            for (int di = -1; di <= 1; di++)
+            {
+                for (int dj = -1; dj <= 1; dj++)
+                {
+                    if (di == 0 && dj == 0) continue; // Skip center position
+                    
+                    double testI = i + di;
+                    double testJ = j + dj;
+                    
+                    if (!IsPositionIlluminated(testI, testJ, arraySize))
+                    {
+                        return true; // This position is on the boundary
+                    }
+                }
+            }
+            
+            return false; // Position is surrounded by illuminated pixels (interior)
         }
         
         private void DisplayImagePlane()
