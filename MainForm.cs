@@ -137,17 +137,19 @@ namespace DiffractionSimulator
             var illuminatedBounds = FindIlluminatedBounds(arraySize);
             if (illuminatedBounds == null) return;
             
-            // Create a denser grid that covers the entire illuminated area
-            int gridSize = 12; // Increased from 8 to 12 for better coverage
+            // Create a grid with a node exactly at the center of the aperture
+            int gridSize = 13; // Use odd number to ensure center node (changed from 12 to 13)
             
             // Calculate grid spacing based on the actual illuminated area size
             // Use the smaller dimension to ensure we don't have gaps
             double minDimension = Math.Min(illuminatedBounds.Value.width, illuminatedBounds.Value.height);
             double gridSpacing = minDimension / (gridSize - 1); // Ensure edge-to-edge coverage
             
-            // Calculate grid starting position to center it in the illuminated area
-            double gridStartI = illuminatedBounds.Value.centerI - ((gridSize - 1) / 2.0) * gridSpacing;
-            double gridStartJ = illuminatedBounds.Value.centerJ - ((gridSize - 1) / 2.0) * gridSpacing;
+            // Calculate grid starting position to place center node exactly at aperture center
+            // With odd gridSize, the center node will be at index (gridSize-1)/2
+            int centerIndex = (gridSize - 1) / 2;
+            double gridStartI = centerApertureI - centerIndex * gridSpacing;
+            double gridStartJ = centerApertureJ - centerIndex * gridSpacing;
             
             // Collect all nodes for triangulation (including boundary nodes)
             List<(double i, double j, bool isBoundary)> allNodes = new List<(double i, double j, bool isBoundary)>();
@@ -271,8 +273,8 @@ namespace DiffractionSimulator
         {
             List<(double i, double j, bool isBoundary)> boundaryNodes = new List<(double i, double j, bool isBoundary)>();
             
-            // Add boundary nodes at regular intervals around the illuminated area
-            int numBoundaryNodes = 48; // Increased for better coverage
+            // Add boundary nodes at extremely dense intervals for smooth boundary approximation
+            int numBoundaryNodes = 360; // Very dense to eliminate any straight edge artifacts
             
             for (int i = 0; i < numBoundaryNodes; i++)
             {
@@ -288,8 +290,81 @@ namespace DiffractionSimulator
                 }
             }
             
+            // Add adaptive boundary nodes to fill any remaining gaps
+            AddImprovedAdaptiveBoundaryNodes(bitmap, arraySize, centerI, centerJ, boundaryNodes);
+            
             return boundaryNodes;
         }
+        
+        private void AddImprovedAdaptiveBoundaryNodes(Bitmap bitmap, int arraySize, double centerI, double centerJ, List<(double i, double j, bool isBoundary)> boundaryNodes)
+        {
+            // Find gaps in the boundary representation and add nodes to fill them
+            double minGapDistance = 1.0; // Very small threshold for extremely dense boundary
+            double maxGapDistance = 2.0; // Very strict maximum distance for perfectly smooth curves
+            
+            var additionalNodes = new List<(double i, double j, bool isBoundary)>();
+            
+            for (int i = 0; i < boundaryNodes.Count; i++)
+            {
+                var currentNode = boundaryNodes[i];
+                var nextNode = boundaryNodes[(i + 1) % boundaryNodes.Count]; // Wrap around
+                
+                // Calculate distance between consecutive boundary nodes
+                double distance = Math.Sqrt(
+                    Math.Pow(nextNode.i - currentNode.i, 2) + 
+                    Math.Pow(nextNode.j - currentNode.j, 2)
+                );
+                
+                // Only add nodes if gap is significant
+                if (distance > maxGapDistance)
+                {
+                    // Calculate how many intermediate nodes we need for smooth approximation
+                    int numIntermediateNodes = Math.Min(2, (int)(distance / minGapDistance));
+                    
+                    for (int j = 1; j <= numIntermediateNodes; j++)
+                    {
+                        double ratio = (double)j / (numIntermediateNodes + 1);
+                        
+                        // Interpolate position between current and next node
+                        double interpI = currentNode.i + ratio * (nextNode.i - currentNode.i);
+                        double interpJ = currentNode.j + ratio * (nextNode.j - currentNode.j);
+                        
+                        // Find the precise boundary position for this interpolated direction
+                        double angle = Math.Atan2(interpJ - centerJ, interpI - centerI);
+                        var precisePosition = FindPreciseBoundaryPosition(centerI, centerJ, angle, arraySize);
+                        
+                        if (precisePosition.HasValue)
+                        {
+                            // Check if this position is sufficiently far from existing nodes
+                            bool tooClose = false;
+                            foreach (var existing in boundaryNodes)
+                            {
+                                double distToExisting = Math.Sqrt(
+                                    Math.Pow(precisePosition.Value.Item1 - existing.i, 2) + 
+                                    Math.Pow(precisePosition.Value.Item2 - existing.j, 2)
+                                );
+                                if (distToExisting < minGapDistance * 0.5) // Very tight proximity check
+                                {
+                                    tooClose = true;
+                                    break;
+                                }
+                            }
+                            
+                            if (!tooClose)
+                            {
+                                DrawDotAtPosition(bitmap, precisePosition.Value.Item1, precisePosition.Value.Item2, arraySize, Color.Red);
+                                additionalNodes.Add((precisePosition.Value.Item1, precisePosition.Value.Item2, true));
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // Add the additional nodes to the main list
+            boundaryNodes.AddRange(additionalNodes);
+        }
+        
+
         
         private (double i, double j)? FindPreciseBoundaryPosition(double centerI, double centerJ, double angle, int arraySize)
         {
