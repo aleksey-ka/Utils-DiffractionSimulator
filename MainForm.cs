@@ -18,19 +18,16 @@ namespace DiffractionSimulator
             InitializeDataArray();
             DisplayArrayAsImage();
             DisplayImagePlane();
+
+            apertureShapeComboBox.SelectedIndex = 0;
+            UpdateObstructionControlState();
         }
 
         private void InitializeDataArray()
         {
             appertureMask = new float[ARRAY_SIZE, ARRAY_SIZE];
             appertureDepth = new double[ARRAY_SIZE, ARRAY_SIZE];
-            imagePlane = new float[ARRAY_SIZE, ARRAY_SIZE];            
-            
-            // Ensure the dropdown has a default selection
-            if (apertureShapeComboBox.SelectedIndex == -1)
-            {
-                apertureShapeComboBox.SelectedIndex = 0; // Default to "Circular"
-            }
+            imagePlane = new float[ARRAY_SIZE, ARRAY_SIZE];
             
             // Initialize with default circular aperture
             UpdateApertureMask();
@@ -47,9 +44,41 @@ namespace DiffractionSimulator
 
         private void UpdateApertureMask()
         {
-            string selectedShape = apertureShapeComboBox.SelectedItem?.ToString() ?? "Square";
+            string selectedShape = apertureShapeComboBox.SelectedItem?.ToString() ?? "Circular";
             
-            if (selectedShape == "Circular")
+            if (selectedShape == "Circular with obstr.")
+            {
+                // Create circular aperture with central obstruction
+                double D_value = (double)D_numericUpDown.Value;
+                double obstructionRatio = (double)obstructionRatioNumericUpDown.Value / 100.0; // Convert percentage to ratio
+                double aperturePixelSize = D_value / ARRAY_SIZE; // mm per pixel in aperture
+                double outerRadius = D_value / 2.0; // outer radius in mm
+                double innerRadius = (D_value * obstructionRatio) / 2.0; // inner radius (obstruction) in mm - 30% of diameter
+                double centerX = ARRAY_SIZE / 2.0;
+                double centerY = ARRAY_SIZE / 2.0;
+                
+                for (int i = 0; i < ARRAY_SIZE; i++)
+                {
+                    for (int j = 0; j < ARRAY_SIZE; j++)
+                    {
+                        // Convert pixel coordinates to physical coordinates (mm)
+                        double x = (i - centerX) * aperturePixelSize;
+                        double y = (j - centerY) * aperturePixelSize;
+                        
+                        // Check if point is within annular region (between inner and outer radius)
+                        double distanceFromCenter = Math.Sqrt(x * x + y * y);
+                        if (distanceFromCenter <= outerRadius && distanceFromCenter >= innerRadius)
+                        {
+                            appertureMask[i, j] = 1.0f;
+                        }
+                        else
+                        {
+                            appertureMask[i, j] = 0.0f;
+                        }
+                    }
+                }
+            }
+            else if (selectedShape == "Circular")
             {
                 // Create circular aperture
                 double D_value = (double)D_numericUpDown.Value;
@@ -90,6 +119,18 @@ namespace DiffractionSimulator
                     }
                 }
             }
+            
+            // Update obstruction control enabled state
+            UpdateObstructionControlState();
+        }
+
+        private void UpdateObstructionControlState()
+        {
+            string selectedShape = apertureShapeComboBox.SelectedItem?.ToString() ?? "Circular";
+            bool shouldShow = (selectedShape == "Circular with obstr.");
+            
+            obstructionRatioNumericUpDown.Visible = shouldShow;
+            obstructionRatio_label.Visible = shouldShow;
         }
 
         private void DisplayArrayAsImage()
@@ -268,6 +309,16 @@ namespace DiffractionSimulator
             // Update aperture mask when shape changes
             UpdateApertureMask();
             DisplayArrayAsImage();
+        }
+        
+        private void ObstructionRatioNumericUpDown_ValueChanged(object sender, EventArgs e)
+        {
+            // Update aperture mask when obstruction ratio changes (only for circular with obstruction)
+            if (apertureShapeComboBox.SelectedItem?.ToString() == "Circular with obstr.")
+            {
+                UpdateApertureMask();
+                DisplayArrayAsImage();
+            }
         }
         
         private void CalculateButton_Click(object sender, EventArgs e)

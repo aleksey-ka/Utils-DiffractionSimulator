@@ -46,6 +46,8 @@ namespace DiffractionSimulator
             apertureShapeComboBox = new ComboBox();
             apertureTitle_label = new Label();
             imagePlaneTitle_label = new Label();
+            obstructionRatio_label = new Label();
+            obstructionRatioNumericUpDown = new NumericUpDown();
             ((System.ComponentModel.ISupportInitialize)apperturePictureBox).BeginInit();
             ((System.ComponentModel.ISupportInitialize)imagePlanePictureBox).BeginInit();
             ((System.ComponentModel.ISupportInitialize)D_numericUpDown).BeginInit();
@@ -53,6 +55,7 @@ namespace DiffractionSimulator
             ((System.ComponentModel.ISupportInitialize)lambda_numericUpDown).BeginInit();
             ((System.ComponentModel.ISupportInitialize)imagePlaneSize_numericUpDown).BeginInit();
             ((System.ComponentModel.ISupportInitialize)integrationSize_numericUpDown).BeginInit();
+            ((System.ComponentModel.ISupportInitialize)obstructionRatioNumericUpDown).BeginInit();
             SuspendLayout();
             // 
             // apperturePictureBox
@@ -127,7 +130,6 @@ namespace DiffractionSimulator
             imagePlaneSize_numericUpDown.Increment = new decimal(new int[] { 1, 0, 0, 65536 });
             imagePlaneSize_numericUpDown.Location = new Point(601, 582);
             imagePlaneSize_numericUpDown.Maximum = new decimal(new int[] { 100, 0, 0, 65536 });
-            imagePlaneSize_numericUpDown.Minimum = new decimal(new int[] { 1, 0, 0, 65536 });
             imagePlaneSize_numericUpDown.Name = "imagePlaneSize_numericUpDown";
             imagePlaneSize_numericUpDown.Size = new Size(80, 23);
             imagePlaneSize_numericUpDown.TabIndex = 6;
@@ -227,7 +229,7 @@ namespace DiffractionSimulator
             apertureShapeComboBox.DropDownStyle = ComboBoxStyle.DropDownList;
             apertureShapeComboBox.ForeColor = Color.White;
             apertureShapeComboBox.FormattingEnabled = true;
-            apertureShapeComboBox.Items.AddRange(new object[] { "Circular", "Square" });
+            apertureShapeComboBox.Items.AddRange(new object[] { "Circular", "Square", "Circular with obstr." });
             apertureShapeComboBox.Location = new Point(450, 582);
             apertureShapeComboBox.Name = "apertureShapeComboBox";
             apertureShapeComboBox.Size = new Size(100, 23);
@@ -237,24 +239,45 @@ namespace DiffractionSimulator
             // apertureTitle_label
             // 
             apertureTitle_label.AutoSize = true;
-            apertureTitle_label.Font = new Font("Segoe UI", 12F, FontStyle.Bold, GraphicsUnit.Point);
+            apertureTitle_label.Font = new Font("Segoe UI", 12F, FontStyle.Bold);
             apertureTitle_label.ForeColor = Color.White;
             apertureTitle_label.Location = new Point(50, 25);
             apertureTitle_label.Name = "apertureTitle_label";
-            apertureTitle_label.Size = new Size(75, 21);
+            apertureTitle_label.Size = new Size(77, 21);
             apertureTitle_label.TabIndex = 16;
             apertureTitle_label.Text = "Aperture";
             // 
             // imagePlaneTitle_label
             // 
             imagePlaneTitle_label.AutoSize = true;
-            imagePlaneTitle_label.Font = new Font("Segoe UI", 12F, FontStyle.Bold, GraphicsUnit.Point);
+            imagePlaneTitle_label.Font = new Font("Segoe UI", 12F, FontStyle.Bold);
             imagePlaneTitle_label.ForeColor = Color.White;
             imagePlaneTitle_label.Location = new Point(600, 25);
             imagePlaneTitle_label.Name = "imagePlaneTitle_label";
-            imagePlaneTitle_label.Size = new Size(95, 21);
+            imagePlaneTitle_label.Size = new Size(105, 21);
             imagePlaneTitle_label.TabIndex = 17;
             imagePlaneTitle_label.Text = "Image Plane";
+            // 
+            // obstructionRatio_label
+            // 
+            obstructionRatio_label.AutoSize = true;
+            obstructionRatio_label.ForeColor = Color.White;
+            obstructionRatio_label.Location = new Point(451, 604);
+            obstructionRatio_label.Name = "obstructionRatio_label";
+            obstructionRatio_label.Size = new Size(83, 15);
+            obstructionRatio_label.TabIndex = 18;
+            obstructionRatio_label.Text = "Obstruction %";
+            obstructionRatio_label.TextAlign = ContentAlignment.MiddleCenter;
+            // 
+            // obstructionRatioNumericUpDown
+            // 
+            obstructionRatioNumericUpDown.DecimalPlaces = 1;
+            obstructionRatioNumericUpDown.Location = new Point(451, 624);
+            obstructionRatioNumericUpDown.Name = "obstructionRatioNumericUpDown";
+            obstructionRatioNumericUpDown.Size = new Size(80, 23);
+            obstructionRatioNumericUpDown.TabIndex = 19;
+            obstructionRatioNumericUpDown.Value = new decimal(new int[] { 300, 0, 0, 65536 });
+            obstructionRatioNumericUpDown.ValueChanged += ObstructionRatioNumericUpDown_ValueChanged;
             // 
             // MainForm
             // 
@@ -280,6 +303,8 @@ namespace DiffractionSimulator
             Controls.Add(apertureShapeComboBox);
             Controls.Add(apertureTitle_label);
             Controls.Add(imagePlaneTitle_label);
+            Controls.Add(obstructionRatio_label);
+            Controls.Add(obstructionRatioNumericUpDown);
             ForeColor = Color.White;
             Name = "MainForm";
             Text = "Diffraction Simulator";
@@ -290,6 +315,7 @@ namespace DiffractionSimulator
             ((System.ComponentModel.ISupportInitialize)lambda_numericUpDown).EndInit();
             ((System.ComponentModel.ISupportInitialize)imagePlaneSize_numericUpDown).EndInit();
             ((System.ComponentModel.ISupportInitialize)integrationSize_numericUpDown).EndInit();
+            ((System.ComponentModel.ISupportInitialize)obstructionRatioNumericUpDown).EndInit();
             ResumeLayout(false);
             PerformLayout();
         }
@@ -314,5 +340,7 @@ namespace DiffractionSimulator
         private ComboBox apertureShapeComboBox;
         private Label apertureTitle_label;
         private Label imagePlaneTitle_label;
+        private Label obstructionRatio_label;
+        private NumericUpDown obstructionRatioNumericUpDown;
     }
 }
