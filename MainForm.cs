@@ -1,6 +1,8 @@
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.Globalization;
+using System.Linq;
+using System.Diagnostics;
 
 namespace DiffractionSimulator
 {
@@ -147,6 +149,9 @@ namespace DiffractionSimulator
             double gridStartI = illuminatedBounds.Value.centerI - ((gridSize - 1) / 2.0) * gridSpacing;
             double gridStartJ = illuminatedBounds.Value.centerJ - ((gridSize - 1) / 2.0) * gridSpacing;
             
+            // Collect all nodes for triangulation (including boundary nodes)
+            List<(double i, double j, bool isBoundary)> allNodes = new List<(double i, double j, bool isBoundary)>();
+            
             // Draw regular grid dots (green) with better coverage
             for (int gridI = 0; gridI < gridSize; gridI++)
             {
@@ -159,11 +164,13 @@ namespace DiffractionSimulator
                     if (IsPositionIlluminated(gridI_pos, gridJ_pos, arraySize) && !IsPositionOnBoundary(gridI_pos, gridJ_pos, arraySize))
                     {
                         DrawDotAtPosition(bitmap, gridI_pos, gridJ_pos, arraySize, Color.Green);
+                        allNodes.Add((gridI_pos, gridJ_pos, false));
                     }
                     else if (IsPositionIlluminated(gridI_pos, gridJ_pos, arraySize))
                     {
                         // Position is illuminated but on boundary - draw as red
                         DrawDotAtPosition(bitmap, gridI_pos, gridJ_pos, arraySize, Color.Red);
+                        allNodes.Add((gridI_pos, gridJ_pos, true)); // Add boundary nodes to triangulation
                     }
                     else
                     {
@@ -175,18 +182,27 @@ namespace DiffractionSimulator
                             if (IsPositionOnBoundary(nearestPosition.Value.Item1, nearestPosition.Value.Item2, arraySize))
                             {
                                 DrawDotAtPosition(bitmap, nearestPosition.Value.Item1, nearestPosition.Value.Item2, arraySize, Color.Red);
+                                allNodes.Add((nearestPosition.Value.Item1, nearestPosition.Value.Item2, true)); // Add boundary nodes to triangulation
                             }
                             else
                             {
                                 DrawDotAtPosition(bitmap, nearestPosition.Value.Item1, nearestPosition.Value.Item2, arraySize, Color.Green);
+                                allNodes.Add((nearestPosition.Value.Item1, nearestPosition.Value.Item2, false));
                             }
                         }
                     }
                 }
             }
             
-            // Add boundary nodes around the illuminated area
-            AddBoundaryNodes(bitmap, arraySize, centerApertureI, centerApertureJ, illuminatedBounds.Value);
+            // Add additional boundary nodes around the illuminated area and include them in triangulation
+            var additionalBoundaryNodes = AddBoundaryNodes(bitmap, arraySize, centerApertureI, centerApertureJ, illuminatedBounds.Value);
+            allNodes.AddRange(additionalBoundaryNodes);
+            
+            // Generate and draw the triangular mesh using all nodes (including boundary nodes)
+            if (allNodes.Count >= 3)
+            {
+                GenerateAndDrawTriangularMesh(bitmap, arraySize, allNodes);
+            }
         }
         
         private (double centerI, double centerJ, double width, double height)? FindIlluminatedBounds(int arraySize)
@@ -251,8 +267,10 @@ namespace DiffractionSimulator
             return null; // No illuminated position found within search radius
         }
         
-        private void AddBoundaryNodes(Bitmap bitmap, int arraySize, double centerI, double centerJ, (double centerI, double centerJ, double width, double height) bounds)
+        private List<(double i, double j, bool isBoundary)> AddBoundaryNodes(Bitmap bitmap, int arraySize, double centerI, double centerJ, (double centerI, double centerJ, double width, double height) bounds)
         {
+            List<(double i, double j, bool isBoundary)> boundaryNodes = new List<(double i, double j, bool isBoundary)>();
+            
             // Add boundary nodes at regular intervals around the illuminated area
             int numBoundaryNodes = 32; // Increased from 16 to 32 for better coverage
             
@@ -304,6 +322,7 @@ namespace DiffractionSimulator
                             if (isStable)
                             {
                                 DrawDotAtPosition(bitmap, boundaryI, boundaryJ, arraySize, Color.Red);
+                                boundaryNodes.Add((boundaryI, boundaryJ, true)); // Boundary node
                             }
                         }
                         break;
@@ -312,6 +331,8 @@ namespace DiffractionSimulator
                     distance += 1.0;
                 }
             }
+            
+            return boundaryNodes;
         }
         
         private void DrawDotAtPosition(Bitmap bitmap, double apertureI, double apertureJ, int arraySize, Color dotColor)
@@ -541,6 +562,208 @@ namespace DiffractionSimulator
             // Calculate diffraction pattern with current parameters
             CalculateDiffractionPattern();
             DisplayImagePlane();
+        }
+
+        private void GenerateAndDrawTriangularMesh(Bitmap bitmap, int arraySize, List<(double i, double j, bool isBoundary)> nodes)
+        {
+            if (nodes.Count < 3) 
+            {
+                Trace.WriteLine($"Not enough nodes for triangulation: {nodes.Count}");
+                return;
+            }
+            
+            Trace.WriteLine($"Starting mesh generation with {nodes.Count} nodes");
+            
+            // Generate Delaunay triangulation
+            var triangles = GenerateDelaunayTriangulation(nodes);
+            
+            Trace.WriteLine($"Generated {triangles.Count} triangles");
+            
+            if (triangles.Count > 0)
+            {
+                // Draw the triangular mesh
+                DrawTriangularMesh(bitmap, arraySize, nodes, triangles);
+                Trace.WriteLine($"Mesh drawn successfully with {triangles.Count} triangles");
+            }
+            else
+            {
+                Trace.WriteLine("No triangles generated - mesh will not be drawn");
+            }
+        }
+        
+        private List<(int node1, int node2, int node3)> GenerateDelaunayTriangulation(List<(double i, double j, bool isBoundary)> nodes)
+        {
+            if (nodes.Count < 3) return new List<(int, int, int)>();
+            
+            Trace.WriteLine($"Starting Delaunay triangulation with {nodes.Count} nodes");
+            
+            // Create a super-triangle that contains all nodes
+            double minX = nodes.Min(n => n.i) - 10;
+            double maxX = nodes.Max(n => n.i) + 10;
+            double minY = nodes.Min(n => n.j) - 10;
+            double maxY = nodes.Max(n => n.j) + 10;
+            
+            double dx = maxX - minX;
+            double dy = maxY - minY;
+            
+            // Create super-triangle vertices (much larger than the point set)
+            var superTriangle = new List<(double i, double j)>
+            {
+                (minX - dx, minY - dy),
+                (maxX + dx, minY - dy),
+                (minX + dx/2, maxY + dy)
+            };
+            
+            // Initialize with super-triangle
+            var triangles = new List<(int v1, int v2, int v3)> { (nodes.Count, nodes.Count + 1, nodes.Count + 2) };
+            var allNodes = nodes.Select(n => (n.i, n.j)).ToList();
+            allNodes.AddRange(superTriangle);
+            
+            // Insert each point one by one
+            for (int pointIndex = 0; pointIndex < nodes.Count; pointIndex++)
+            {
+                var point = allNodes[pointIndex];
+                var badTriangles = new List<int>();
+                
+                // Find triangles whose circumcircle contains the point
+                for (int t = 0; t < triangles.Count; t++)
+                {
+                    var triangle = triangles[t];
+                    if (IsPointInCircumcircle(point, allNodes[triangle.v1], allNodes[triangle.v2], allNodes[triangle.v3]))
+                    {
+                        badTriangles.Add(t);
+                    }
+                }
+                
+                // Find the boundary of the polygonal hole
+                var polygon = new List<(int v1, int v2)>();
+                foreach (int badTriangle in badTriangles)
+                {
+                    var triangle = triangles[badTriangle];
+                    var edges = new List<(int v1, int v2)>
+                    {
+                        (triangle.v1, triangle.v2),
+                        (triangle.v2, triangle.v3),
+                        (triangle.v3, triangle.v1)
+                    };
+                    
+                    foreach (var edge in edges)
+                    {
+                        var reverseEdge = (edge.v2, edge.v1);
+                        if (polygon.Contains(reverseEdge))
+                        {
+                            polygon.Remove(reverseEdge);
+                        }
+                        else
+                        {
+                            polygon.Add(edge);
+                        }
+                    }
+                }
+                
+                // Remove bad triangles
+                badTriangles.Sort((a, b) => b.CompareTo(a)); // Sort descending
+                foreach (int badTriangle in badTriangles)
+                {
+                    triangles.RemoveAt(badTriangle);
+                }
+                
+                // Add new triangles formed by connecting the point to the polygon boundary
+                foreach (var edge in polygon)
+                {
+                    triangles.Add((pointIndex, edge.v1, edge.v2));
+                }
+            }
+            
+            // Remove triangles that contain super-triangle vertices
+            var finalTriangles = triangles.Where(t => 
+                t.v1 < nodes.Count && t.v2 < nodes.Count && t.v3 < nodes.Count
+            ).ToList();
+            
+            Trace.WriteLine($"Delaunay triangulation created {finalTriangles.Count} triangles from {nodes.Count} nodes");
+            return finalTriangles.Select(t => (t.v1, t.v2, t.v3)).ToList();
+        }
+        
+        private bool IsPointInCircumcircle((double i, double j) p, (double i, double j) a, (double i, double j) b, (double i, double j) c)
+        {
+            // Calculate circumcircle using determinant method
+            double ax = a.i - p.i;
+            double ay = a.j - p.j;
+            double bx = b.i - p.i;
+            double by = b.j - p.j;
+            double cx = c.i - p.i;
+            double cy = c.j - p.j;
+            
+            double det = (ax * ax + ay * ay) * (bx * cy - by * cx) -
+                        (bx * bx + by * by) * (ax * cy - ay * cx) +
+                        (cx * cx + cy * cy) * (ax * by - ay * bx);
+            
+            return det > 0;
+        }
+        
+        private void DrawTriangularMesh(Bitmap bitmap, int arraySize, List<(double i, double j, bool isBoundary)> nodes, List<(int node1, int node2, int node3)> triangles)
+        {
+            // Draw triangles with visible lines
+            Color meshColor = Color.Green;
+            
+            foreach (var triangle in triangles)
+            {
+                var node1 = nodes[triangle.node1];
+                var node2 = nodes[triangle.node2];
+                var node3 = nodes[triangle.node3];
+                
+                // Draw triangle edges
+                DrawLine(bitmap, arraySize, node1.i, node1.j, node2.i, node2.j, meshColor);
+                DrawLine(bitmap, arraySize, node2.i, node2.j, node3.i, node3.j, meshColor);
+                DrawLine(bitmap, arraySize, node3.i, node3.j, node1.i, node1.j, meshColor);
+            }
+        }
+        
+        private void DrawLine(Bitmap bitmap, int arraySize, double x1, double y1, double x2, double y2, Color color)
+        {
+            // Convert aperture coordinates to display coordinates
+            int x0 = (int)((x1 * ARRAY_SIZE) / (double)arraySize);
+            int y0 = (int)((y1 * ARRAY_SIZE) / (double)arraySize);
+            int x1_int = (int)((x2 * ARRAY_SIZE) / (double)arraySize);
+            int y1_int = (int)((y2 * ARRAY_SIZE) / (double)arraySize);
+            
+            // Clamp coordinates
+            x0 = Math.Max(0, Math.Min(ARRAY_SIZE - 1, x0));
+            y0 = Math.Max(0, Math.Min(ARRAY_SIZE - 1, y0));
+            x1_int = Math.Max(0, Math.Min(ARRAY_SIZE - 1, x1_int));
+            y1_int = Math.Max(0, Math.Min(ARRAY_SIZE - 1, y1_int));
+            
+            // Bresenham's line algorithm
+            int dx = Math.Abs(x1_int - x0);
+            int dy = Math.Abs(y1_int - y0);
+            int sx = x0 < x1_int ? 1 : -1;
+            int sy = y0 < y1_int ? 1 : -1;
+            int err = dx - dy;
+            
+            int x = x0, y = y0;
+            
+            while (true)
+            {
+                // Draw a single pixel line
+                if (x >= 0 && x < ARRAY_SIZE && y >= 0 && y < ARRAY_SIZE)
+                {
+                    bitmap.SetPixel(y, x, color);
+                }
+                
+                if (x == x1_int && y == y1_int) break;
+                
+                int e2 = 2 * err;
+                if (e2 > -dy)
+                {
+                    err -= dy;
+                    x += sx;
+                }
+                if (e2 < dx)
+                {
+                    err += dx;
+                    y += sy;
+                }
+            }
         }
     }
 }
