@@ -129,12 +129,15 @@ namespace DiffractionSimulator
                 return; // Nothing to draw if mask is not initialized
             }
             
+            // Use fixed size for grid generation - sampling should not affect grid appearance
+            int fixedArraySize = ARRAY_SIZE; // Always use the display resolution for grid
+            
             // Calculate the center of the aperture (exact center)
-            double centerApertureI = (arraySize - 1) / 2.0;
-            double centerApertureJ = (arraySize - 1) / 2.0;
+            double centerApertureI = (fixedArraySize - 1) / 2.0;
+            double centerApertureJ = (fixedArraySize - 1) / 2.0;
             
             // Find the illuminated area bounds to determine optimal grid spacing
-            var illuminatedBounds = FindIlluminatedBounds(arraySize);
+            var illuminatedBounds = FindIlluminatedBounds(fixedArraySize);
             if (illuminatedBounds == null) return;
             
             // Create a grid with a node exactly at the center of the aperture
@@ -162,82 +165,63 @@ namespace DiffractionSimulator
                     double gridI_pos = gridStartI + gridI * gridSpacing;
                     double gridJ_pos = gridStartJ + gridJ * gridSpacing;
                     
-                    // Only draw if this position is illuminated AND not on the boundary
-                    if (IsPositionIlluminated(gridI_pos, gridJ_pos, arraySize) && !IsPositionOnBoundary(gridI_pos, gridJ_pos, arraySize))
+                    // Only draw if this exact grid position is illuminated (no fallback searching)
+                    if (IsPositionIlluminatedDirect(gridI_pos, gridJ_pos, fixedArraySize))
                     {
-                        DrawDotAtPosition(bitmap, gridI_pos, gridJ_pos, arraySize, Color.Green);
+                        DrawDotAtPosition(bitmap, gridI_pos, gridJ_pos, fixedArraySize, Color.Green);
                         allNodes.Add((gridI_pos, gridJ_pos, false));
                     }
-                    else if (IsPositionIlluminated(gridI_pos, gridJ_pos, arraySize))
-                    {
-                        // Position is illuminated but on boundary - draw as red
-                        DrawDotAtPosition(bitmap, gridI_pos, gridJ_pos, arraySize, Color.Red);
-                        allNodes.Add((gridI_pos, gridJ_pos, true)); // Add boundary nodes to triangulation
-                    }
-                    else
-                    {
-                        // If the grid position is not illuminated, try to find the nearest illuminated position
-                        var nearestPosition = FindNearestIlluminatedPosition(gridI_pos, gridJ_pos, arraySize);
-                        if (nearestPosition.HasValue)
-                        {
-                            // Check if the nearest position is on the boundary
-                            if (IsPositionOnBoundary(nearestPosition.Value.Item1, nearestPosition.Value.Item2, arraySize))
-                            {
-                                DrawDotAtPosition(bitmap, nearestPosition.Value.Item1, nearestPosition.Value.Item2, arraySize, Color.Red);
-                                allNodes.Add((nearestPosition.Value.Item1, nearestPosition.Value.Item2, true)); // Add boundary nodes to triangulation
-                            }
-                            else
-                            {
-                                DrawDotAtPosition(bitmap, nearestPosition.Value.Item1, nearestPosition.Value.Item2, arraySize, Color.Green);
-                                allNodes.Add((nearestPosition.Value.Item1, nearestPosition.Value.Item2, false));
-                            }
-                        }
-                    }
+                    // If position is not illuminated, skip it entirely - no fallback searching
                 }
             }
             
             // Add additional boundary nodes around the illuminated area and include them in triangulation
-            var additionalBoundaryNodes = AddBoundaryNodes(bitmap, arraySize, centerApertureI, centerApertureJ, illuminatedBounds.Value);
+            var additionalBoundaryNodes = AddBoundaryNodes(bitmap, fixedArraySize, centerApertureI, centerApertureJ, illuminatedBounds.Value);
             allNodes.AddRange(additionalBoundaryNodes);
             
             // Generate and draw the triangular mesh using all nodes (including boundary nodes)
             if (allNodes.Count >= 3)
             {
-                GenerateAndDrawTriangularMesh(bitmap, arraySize, allNodes);
+                GenerateAndDrawTriangularMesh(bitmap, fixedArraySize, allNodes);
             }
         }
         
         private (double centerI, double centerJ, double width, double height)? FindIlluminatedBounds(int arraySize)
         {
-            if (appertureMask == null) return null;
+            // Use direct mathematical calculation instead of mask scanning
+            // This provides exact bounds regardless of sampling
             
-            int minI = arraySize, maxI = 0, minJ = arraySize, maxJ = 0;
-            bool foundIlluminated = false;
+            string selectedShape = apertureShapeComboBox.SelectedItem?.ToString() ?? "Circular";
+            double D_value = (double)D_numericUpDown.Value;
+            double obstructionRatio = (double)obstructionRatioNumericUpDown.Value;
             
-            // Find the bounding box of illuminated area
-            for (int i = 0; i < arraySize; i++)
+            // Calculate physical coordinates
+            double aperturePixelSize = D_value / arraySize; // mm per pixel in aperture
+            double centerI = arraySize / 2.0;
+            double centerJ = arraySize / 2.0;
+            
+            switch (selectedShape)
             {
-                for (int j = 0; j < arraySize; j++)
-                {
-                    if (appertureMask[i, j] > 0.001)
+                case "Circular":
+                case "Circular with obstr.":
                     {
-                        minI = Math.Min(minI, i);
-                        maxI = Math.Max(maxI, i);
-                        minJ = Math.Min(minJ, j);
-                        maxJ = Math.Max(maxJ, j);
-                        foundIlluminated = true;
+                        // For circular apertures, the bounds are determined by the outer radius
+                        double radius = D_value / 2.0; // radius in mm
+                        double radiusInPixels = radius / aperturePixelSize;
+                        
+                        double width = radiusInPixels * 2;
+                        double height = radiusInPixels * 2;
+                        
+                        return (centerI, centerJ, width, height);
                     }
-                }
+                    
+                case "Square":
+                default:
+                    {
+                        // For square aperture, use the full array size
+                        return (centerI, centerJ, arraySize, arraySize);
+                    }
             }
-            
-            if (!foundIlluminated) return null;
-            
-            double centerI = (minI + maxI) / 2.0;
-            double centerJ = (minJ + maxJ) / 2.0;
-            double width = maxI - minI;
-            double height = maxJ - minJ;
-            
-            return (centerI, centerJ, width, height);
         }
         
         private (double, double)? FindNearestIlluminatedPosition(double targetI, double targetJ, int arraySize)
@@ -273,96 +257,172 @@ namespace DiffractionSimulator
         {
             List<(double i, double j, bool isBoundary)> boundaryNodes = new List<(double i, double j, bool isBoundary)>();
             
-            // Add boundary nodes at extremely dense intervals for smooth boundary approximation
-            int numBoundaryNodes = 360; // Very dense to eliminate any straight edge artifacts
+            // Create rays from center at 5-degree intervals
+            double angleStep = 5.0; // 5 degrees between rays
+            int numRays = (int)(360.0 / angleStep); // 72 rays total
             
-            for (int i = 0; i < numBoundaryNodes; i++)
+            for (int i = 0; i < numRays; i++)
             {
-                double angle = (2.0 * Math.PI * i) / numBoundaryNodes;
+                double angleDegrees = i * angleStep;
+                double angleRadians = angleDegrees * Math.PI / 180.0;
                 
-                // Find the precise boundary position using binary search
-                var boundaryPosition = FindPreciseBoundaryPosition(centerI, centerJ, angle, arraySize);
+                // Cast ray from center and find boundary intersection - this never fails now
+                var boundaryIntersection = FindRayBoundaryIntersection(centerI, centerJ, angleRadians, arraySize);
                 
-                if (boundaryPosition.HasValue)
+                // The improved algorithm always returns a valid position
+                if (boundaryIntersection.HasValue)
                 {
-                    DrawDotAtPosition(bitmap, boundaryPosition.Value.Item1, boundaryPosition.Value.Item2, arraySize, Color.Red);
-                    boundaryNodes.Add((boundaryPosition.Value.Item1, boundaryPosition.Value.Item2, true));
+                    DrawDotAtPosition(bitmap, boundaryIntersection.Value.Item1, boundaryIntersection.Value.Item2, arraySize, Color.Red);
+                    boundaryNodes.Add((boundaryIntersection.Value.Item1, boundaryIntersection.Value.Item2, true));
                 }
             }
-            
-            // Add adaptive boundary nodes to fill any remaining gaps
-            AddImprovedAdaptiveBoundaryNodes(bitmap, arraySize, centerI, centerJ, boundaryNodes);
             
             return boundaryNodes;
         }
         
-        private void AddImprovedAdaptiveBoundaryNodes(Bitmap bitmap, int arraySize, double centerI, double centerJ, List<(double i, double j, bool isBoundary)> boundaryNodes)
+        private (double i, double j)? FindRayBoundaryIntersection(double centerI, double centerJ, double angle, int arraySize)
         {
-            // Find gaps in the boundary representation and add nodes to fill them
-            double minGapDistance = 1.0; // Very small threshold for extremely dense boundary
-            double maxGapDistance = 2.0; // Very strict maximum distance for perfectly smooth curves
+            // Cast a ray from center in the given direction and find where it hits the boundary
+            double directionI = Math.Cos(angle);
+            double directionJ = Math.Sin(angle);
             
-            var additionalNodes = new List<(double i, double j, bool isBoundary)>();
+            // Start from center and march outward to find approximate boundary
+            double step = 1.0; // Start with larger step for initial search
+            double distance = 0.5; // Start very close to center
+            double maxDistance = Math.Max(arraySize, 500);
             
-            for (int i = 0; i < boundaryNodes.Count; i++)
+            // First, find the approximate boundary with larger steps
+            while (distance < maxDistance)
             {
-                var currentNode = boundaryNodes[i];
-                var nextNode = boundaryNodes[(i + 1) % boundaryNodes.Count]; // Wrap around
+                double testI = centerI + distance * directionI;
+                double testJ = centerJ + distance * directionJ;
                 
-                // Calculate distance between consecutive boundary nodes
-                double distance = Math.Sqrt(
-                    Math.Pow(nextNode.i - currentNode.i, 2) + 
-                    Math.Pow(nextNode.j - currentNode.j, 2)
-                );
-                
-                // Only add nodes if gap is significant
-                if (distance > maxGapDistance)
+                if (!IsPositionIlluminatedDirect(testI, testJ, arraySize))
                 {
-                    // Calculate how many intermediate nodes we need for smooth approximation
-                    int numIntermediateNodes = Math.Min(2, (int)(distance / minGapDistance));
-                    
-                    for (int j = 1; j <= numIntermediateNodes; j++)
-                    {
-                        double ratio = (double)j / (numIntermediateNodes + 1);
-                        
-                        // Interpolate position between current and next node
-                        double interpI = currentNode.i + ratio * (nextNode.i - currentNode.i);
-                        double interpJ = currentNode.j + ratio * (nextNode.j - currentNode.j);
-                        
-                        // Find the precise boundary position for this interpolated direction
-                        double angle = Math.Atan2(interpJ - centerJ, interpI - centerI);
-                        var precisePosition = FindPreciseBoundaryPosition(centerI, centerJ, angle, arraySize);
-                        
-                        if (precisePosition.HasValue)
-                        {
-                            // Check if this position is sufficiently far from existing nodes
-                            bool tooClose = false;
-                            foreach (var existing in boundaryNodes)
-                            {
-                                double distToExisting = Math.Sqrt(
-                                    Math.Pow(precisePosition.Value.Item1 - existing.i, 2) + 
-                                    Math.Pow(precisePosition.Value.Item2 - existing.j, 2)
-                                );
-                                if (distToExisting < minGapDistance * 0.5) // Very tight proximity check
-                                {
-                                    tooClose = true;
-                                    break;
-                                }
-                            }
-                            
-                            if (!tooClose)
-                            {
-                                DrawDotAtPosition(bitmap, precisePosition.Value.Item1, precisePosition.Value.Item2, arraySize, Color.Red);
-                                additionalNodes.Add((precisePosition.Value.Item1, precisePosition.Value.Item2, true));
-                            }
-                        }
-                    }
+                    // Found boundary transition - now use iterative refinement
+                    return FindPreciseBoundaryWithIterativeRefinement(centerI, centerJ, directionI, directionJ, distance - step, distance, arraySize);
                 }
+                
+                distance += step;
             }
             
-            // Add the additional nodes to the main list
-            boundaryNodes.AddRange(additionalNodes);
+            // If we reach here, the ray went to the array boundary without finding aperture boundary
+            // Calculate exactly where this ray intersects the array boundary
+            
+            // Find intersection with array boundaries (at edges 0 and arraySize-1)
+            double tMin = double.MaxValue;
+            
+            // Check intersection with left edge (i = 0)
+            if (directionI < 0)
+            {
+                double t = -centerI / directionI;
+                if (t > 0) tMin = Math.Min(tMin, t);
+            }
+            
+            // Check intersection with right edge (i = arraySize-1)
+            if (directionI > 0)
+            {
+                double t = (arraySize - 1 - centerI) / directionI;
+                if (t > 0) tMin = Math.Min(tMin, t);
+            }
+            
+            // Check intersection with top edge (j = 0)
+            if (directionJ < 0)
+            {
+                double t = -centerJ / directionJ;
+                if (t > 0) tMin = Math.Min(tMin, t);
+            }
+            
+            // Check intersection with bottom edge (j = arraySize-1)
+            if (directionJ > 0)
+            {
+                double t = (arraySize - 1 - centerJ) / directionJ;
+                if (t > 0) tMin = Math.Min(tMin, t);
+            }
+            
+            // Calculate the exact intersection point on the ray
+            double edgeDistance = tMin * 0.95; // Step back slightly to be just inside
+            double edgeI = centerI + edgeDistance * directionI;
+            double edgeJ = centerJ + edgeDistance * directionJ;
+            
+            return (edgeI, edgeJ);
         }
+        
+        private (double i, double j)? FindPreciseBoundaryWithIterativeRefinement(double centerI, double centerJ, double directionI, double directionJ, double minDistance, double maxDistance, int arraySize)
+        {
+            // Iterative refinement: go back and forth with decreasing increments
+            double currentDistance = minDistance; // Start from last known good position (inside)
+            double increment = (maxDistance - minDistance) / 4.0; // Start with 1/4 of the gap
+            bool movingForward = true; // Direction of movement
+            int maxIterations = 20; // Prevent infinite loops
+            
+            for (int iteration = 0; iteration < maxIterations; iteration++)
+            {
+                // Test current position
+                double testI = centerI + currentDistance * directionI;
+                double testJ = centerJ + currentDistance * directionJ;
+                bool isIlluminated = IsPositionIlluminatedDirect(testI, testJ, arraySize);
+                
+                if (movingForward)
+                {
+                    if (isIlluminated)
+                    {
+                        // Still inside, continue forward
+                        currentDistance += increment;
+                    }
+                    else
+                    {
+                        // Hit boundary, reverse direction and reduce increment
+                        currentDistance -= increment;
+                        movingForward = false;
+                        increment *= 0.5; // Halve the increment for finer precision
+                    }
+                }
+                else
+                {
+                    if (!isIlluminated)
+                    {
+                        // Still outside, continue backward
+                        currentDistance -= increment;
+                    }
+                    else
+                    {
+                        // Back inside, reverse direction and reduce increment
+                        currentDistance += increment;
+                        movingForward = true;
+                        increment *= 0.5; // Halve the increment for finer precision
+                    }
+                }
+                
+                // Stop when increment becomes very small (high precision achieved)
+                if (increment < 0.005) // 0.005 pixel precision
+                {
+                    break;
+                }
+                
+                // Ensure we don't go beyond bounds
+                currentDistance = Math.Max(0, Math.Min(maxDistance * 1.1, currentDistance));
+            }
+            
+            // Final position should be just inside the illuminated area
+            double finalI = centerI + currentDistance * directionI;
+            double finalJ = centerJ + currentDistance * directionJ;
+            
+            // Verify the final position is illuminated
+            if (IsPositionIlluminatedDirect(finalI, finalJ, arraySize))
+            {
+                return (finalI, finalJ);
+            }
+            
+            // If not illuminated, step back slightly
+            currentDistance -= 0.01;
+            finalI = centerI + currentDistance * directionI;
+            finalJ = centerJ + currentDistance * directionJ;
+            
+            return (finalI, finalJ);
+        }
+        
+
         
 
         
@@ -450,6 +510,12 @@ namespace DiffractionSimulator
         
         private bool IsPositionIlluminated(double i, double j, int arraySize)
         {
+            // Check bounds first - positions outside the array are not illuminated
+            if (i < 0 || i >= arraySize || j < 0 || j >= arraySize)
+            {
+                return false;
+            }
+            
             // Use bilinear interpolation for sub-pixel precision
             int i0 = (int)Math.Floor(i);
             int i1 = (int)Math.Ceiling(i);
@@ -493,6 +559,113 @@ namespace DiffractionSimulator
                               (1 - wi) * wj * appertureMask[i0, j1] +
                               wi * wj * appertureMask[i1, j1];
                 return value > 0.001; // Use small threshold for precision
+            }
+        }
+        
+        private bool IsPositionIlluminatedDirect(double i, double j, int arraySize)
+        {
+            // Check bounds first - positions outside the array are not illuminated
+            if (i < 0 || i >= arraySize || j < 0 || j >= arraySize)
+            {
+                return false;
+            }
+            
+            // Use the same mathematical formulas as the original aperture generation
+            // Get current aperture parameters
+            string selectedShape = apertureShapeComboBox.SelectedItem?.ToString() ?? "Circular";
+            double D_value = (double)D_numericUpDown.Value;
+            double obstructionRatio = (double)obstructionRatioNumericUpDown.Value;
+            double sampling = double.Parse(samplingComboBox.SelectedItem?.ToString() ?? "1.0", CultureInfo.InvariantCulture);
+            
+            // Calculate physical coordinates using the same logic as ApertureMaskGenerator
+            double aperturePixelSize = D_value / arraySize; // mm per pixel in aperture
+            double centerX = arraySize / 2.0;
+            double centerY = arraySize / 2.0;
+            
+            // Convert pixel coordinates to physical coordinates (mm)
+            double x = (i - centerX) * aperturePixelSize;
+            double y = (j - centerY) * aperturePixelSize;
+            
+            switch (selectedShape)
+            {
+                case "Circular":
+                    {
+                        double radius = D_value / 2.0; // radius in mm
+                        double distanceFromCenter = Math.Sqrt(x * x + y * y);
+                        return distanceFromCenter <= radius;
+                    }
+                    
+                case "Circular with obstr.":
+                    {
+                        double obstructionRatioDecimal = obstructionRatio / 100.0; // Convert percentage to ratio
+                        double outerRadius = D_value / 2.0; // outer radius in mm
+                        double innerRadius = (D_value * obstructionRatioDecimal) / 2.0; // inner radius (obstruction) in mm
+                        double distanceFromCenter = Math.Sqrt(x * x + y * y);
+                        return distanceFromCenter <= outerRadius && distanceFromCenter >= innerRadius;
+                    }
+                    
+                case "Square":
+                default:
+                    // For square aperture, everything within the array is illuminated
+                    return true;
+            }
+        }
+        
+        private bool IsPositionForBoundaryDetection(double i, double j, int arraySize)
+        {
+            // Check bounds first - positions outside the array are not illuminated
+            if (i < 0 || i >= arraySize || j < 0 || j >= arraySize)
+            {
+                return false;
+            }
+            
+            // For boundary detection, use the same logic as IsPositionIlluminated
+            // but this method is specifically for finding the true aperture boundary
+            if (appertureMask == null) return false;
+            
+            // Use bilinear interpolation for smooth boundary detection
+            int i0 = (int)Math.Floor(i);
+            int i1 = (int)Math.Ceiling(i);
+            int j0 = (int)Math.Floor(j);
+            int j1 = (int)Math.Ceiling(j);
+            
+            // Clamp coordinates to valid array range
+            i0 = Math.Max(0, Math.Min(arraySize - 1, i0));
+            i1 = Math.Max(0, Math.Min(arraySize - 1, i1));
+            j0 = Math.Max(0, Math.Min(arraySize - 1, j0));
+            j1 = Math.Max(0, Math.Min(arraySize - 1, j1));
+            
+            // Handle edge case where i0 == i1 or j0 == j1
+            if (i0 == i1 && j0 == j1)
+            {
+                return appertureMask[i0, j0] > 0.5; // Use 0.5 as the boundary threshold
+            }
+            
+            // Calculate interpolation weights
+            double wi = (i - i0) / (i1 - i0);
+            double wj = (j - j0) / (j1 - j0);
+            
+            // Handle edge cases
+            if (i0 == i1)
+            {
+                // Linear interpolation in j direction only
+                double value = (1 - wj) * appertureMask[i0, j0] + wj * appertureMask[i0, j1];
+                return value > 0.5; // 0.5 threshold for boundary detection
+            }
+            else if (j0 == j1)
+            {
+                // Linear interpolation in i direction only
+                double value = (1 - wi) * appertureMask[i0, j0] + wi * appertureMask[i1, j0];
+                return value > 0.5; // 0.5 threshold for boundary detection
+            }
+            else
+            {
+                // Bilinear interpolation
+                double value = (1 - wi) * (1 - wj) * appertureMask[i0, j0] +
+                              wi * (1 - wj) * appertureMask[i1, j0] +
+                              (1 - wi) * wj * appertureMask[i0, j1] +
+                              wi * wj * appertureMask[i1, j1];
+                return value > 0.5; // 0.5 threshold for boundary detection
             }
         }
         
