@@ -56,8 +56,8 @@ namespace DiffractionSimulator
             int arraySize = apertureMask.GetLength(0);
             double aperturePixelSize = D / arraySize; // mm per pixel in aperture
             double radius = D / 2.0; // radius in mm
-            double centerX = arraySize / 2.0;
-            double centerY = arraySize / 2.0;
+            double centerX = (arraySize - 1) / 2.0; // Center pixel for symmetric aperture
+            double centerY = (arraySize - 1) / 2.0;
             
             for (int i = 0; i < arraySize; i++)
             {
@@ -89,8 +89,8 @@ namespace DiffractionSimulator
             double aperturePixelSize = D / arraySize; // mm per pixel in aperture
             double outerRadius = D / 2.0; // outer radius in mm
             double innerRadius = (D * obstructionRatioDecimal) / 2.0; // inner radius (obstruction) in mm
-            double centerX = arraySize / 2.0;
-            double centerY = arraySize / 2.0;
+            double centerX = (arraySize - 1) / 2.0; // Center pixel for symmetric aperture
+            double centerY = (arraySize - 1) / 2.0;
             
             for (int i = 0; i < arraySize; i++)
             {
