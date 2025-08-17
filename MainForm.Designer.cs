@@ -52,6 +52,7 @@ namespace DiffractionSimulator
             obstructionRatioNumericUpDown = new NumericUpDown();
             grid_label = new Label();
             gridComboBox = new ComboBox();
+            triangularDiffractionButton = new Button();
             ((System.ComponentModel.ISupportInitialize)apperturePictureBox).BeginInit();
             ((System.ComponentModel.ISupportInitialize)imagePlanePictureBox).BeginInit();
             ((System.ComponentModel.ISupportInitialize)D_numericUpDown).BeginInit();
@@ -251,6 +252,19 @@ namespace DiffractionSimulator
             gridComboBox.TabIndex = 21;
             gridComboBox.SelectedIndexChanged += GridComboBox_SelectedIndexChanged;
             // 
+            // triangularDiffractionButton
+            // 
+            triangularDiffractionButton.BackColor = Color.FromArgb(64, 64, 64);
+            triangularDiffractionButton.FlatStyle = FlatStyle.Flat;
+            triangularDiffractionButton.ForeColor = Color.White;
+            triangularDiffractionButton.Location = new Point(880, 650);
+            triangularDiffractionButton.Name = "triangularDiffractionButton";
+            triangularDiffractionButton.Size = new Size(120, 39);
+            triangularDiffractionButton.TabIndex = 22;
+            triangularDiffractionButton.Text = "Triangular Diffraction";
+            triangularDiffractionButton.UseVisualStyleBackColor = false;
+            triangularDiffractionButton.Click += TriangularDiffractionButton_Click;
+            // 
             // apertureShape_label
             // 
             apertureShape_label.AutoSize = true;
@@ -361,6 +375,7 @@ namespace DiffractionSimulator
             Controls.Add(imagePlaneTitle_label);
             Controls.Add(obstructionRatio_label);
             Controls.Add(obstructionRatioNumericUpDown);
+            Controls.Add(triangularDiffractionButton);
             ForeColor = Color.White;
             Name = "MainForm";
             Text = "Diffraction Simulator";
@@ -402,5 +417,6 @@ namespace DiffractionSimulator
         private NumericUpDown obstructionRatioNumericUpDown;
         private Label grid_label;
         private ComboBox gridComboBox;
+        private Button triangularDiffractionButton;
     }
 }

@@ -914,6 +914,209 @@ namespace DiffractionSimulator
                 }
             }
         }
+        
+        private void TriangularDiffractionButton_Click(object sender, EventArgs e)
+        {
+            // Get the current triangular aperture parameters
+            string selectedShape = apertureShapeComboBox.SelectedItem?.ToString() ?? "Circular";
+            if (selectedShape != "Triangular")
+            {
+                MessageBox.Show("Please select 'Triangular' aperture shape first.", "Invalid Aperture", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+            
+            // Get physical parameters
+            double D_value = (double)D_numericUpDown.Value;
+            double f_value = (double)f_numericUpDown.Value;
+            double lambda_value = (double)lambda_numericUpDown.Value;
+            double imagePlaneSize_value = (double)imagePlaneSize_numericUpDown.Value;
+            
+            // Calculate triangle vertices (same as in ApertureMaskGenerator)
+            double radius = D_value / 2.0; // radius of circumscribing circle in mm
+            
+            // Left vertex (pointing leftward in physical space)
+            double vertex1X_mm = -radius;
+            double vertex1Y_mm = 0;
+            
+            // Bottom-left vertex 
+            double vertex2X_mm = radius / 2.0;
+            double vertex2Y_mm = -radius * Math.Sqrt(3) / 2.0;
+            
+            // Bottom-right vertex
+            double vertex3X_mm = radius / 2.0;
+            double vertex3Y_mm = radius * Math.Sqrt(3) / 2.0;
+            
+            // Call the triangular diffraction calculation method
+            CalculateTriangularDiffraction(vertex1X_mm, vertex1Y_mm, vertex2X_mm, vertex2Y_mm, vertex3X_mm, vertex3Y_mm, 
+                D_value, f_value, lambda_value, imagePlaneSize_value);
+        }
+        
+        private void CalculateTriangularDiffraction(double v1x, double v1y, double v2x, double v2y, double v3x, double v3y,
+            double D, double f, double lambda, double imagePlaneSize)
+        {
+            // Calculate z-values (depth) for each vertex using the same spherical wavefront logic
+            // as used in WavefrontGenerator.GenerateSphericalWavefront
+            
+            // Calculate depth for each vertex using the spherical wavefront formula
+            double v1z = CalculateSphericalWavefrontDepth(v1x, v1y, f);
+            double v2z = CalculateSphericalWavefrontDepth(v2x, v2y, f);
+            double v3z = CalculateSphericalWavefrontDepth(v3x, v3y, f);
+
+            // Calculate the area of the triangle (in aperture plane)
+            double area = 0.5 * Math.Abs(v1x * (v2y - v3y) + v2x * (v3y - v1y) + v3x * (v1y - v2y));
+            
+            if (imagePlane != null)
+            {
+                for (int i = 0; i < ARRAY_SIZE; i++)
+                {
+                    for (int j = 0; j < ARRAY_SIZE; j++)
+                    {
+                        // Calculate image plane pixel coordinates to physical coordinates (mm)
+                        double imagePixelSize = imagePlaneSize / ARRAY_SIZE;
+                        double imageCenterX = (ARRAY_SIZE - 1) / 2.0;
+                        double imageCenterY = (ARRAY_SIZE - 1) / 2.0;
+                        
+                        double imageX = (i - imageCenterX) * imagePixelSize;
+                        double imageY = (j - imageCenterY) * imagePixelSize;
+                        
+                        // Calculate distances from this image plane pixel to each vertex
+                        double distance1 = CalculateDistance3D(imageX, imageY, f, v1x, v1y, v1z);
+                        double distance2 = CalculateDistance3D(imageX, imageY, f, v2x, v2y, v2z);
+                        double distance3 = CalculateDistance3D(imageX, imageY, f, v3x, v3y, v3z);
+
+                        if( distance1 == distance2 && distance2 == distance3 )
+                        {
+                            // Normalized intensity
+                            imagePlane[i, j] = 1.0f;
+                            continue;
+                        }
+
+                        // Sort the vertices by distance
+                        (double x, double y, double z, double distance)[] vertices = { 
+                            (v1x, v1y, v1z, distance1), 
+                            (v2x, v2y, v2z, distance2), 
+                            (v3x, v3y, v3z, distance3) 
+                        };
+                        Array.Sort(vertices, (a, b) => a.distance.CompareTo(b.distance));
+
+                        if( vertices[2].distance == vertices[0].distance )
+                        {
+                            double magnitude1 = CalculateIntegral(vertices, lambda, area);
+                            imagePlane[i, j] = 0f;//(float)(magnitude1 * magnitude1 / area / area); 
+                            continue;
+                        }
+
+                        if( vertices[1].distance == vertices[0].distance )
+                        {
+                            (double x, double y, double z, double distance)[] vertices0 = {
+                                vertices[1],     
+                                vertices[2],
+                                vertices[0]
+                            };
+
+                            double magnitude1 = CalculateIntegral( vertices0, lambda, area);
+                            imagePlane[i, j] = (float)(magnitude1 * magnitude1 / area / area); 
+                            continue;
+                        }
+
+                        if( vertices[2].distance == vertices[1].distance )
+                        {
+                            (double x, double y, double z, double distance)[] vertices0 = {
+                                vertices[2],     
+                                vertices[0],
+                                vertices[1]
+                            };
+
+                            double magnitude1 = CalculateIntegral( vertices0, lambda, area);
+                            imagePlane[i, j] = (float)(magnitude1 * magnitude1 / area / area); 
+                            continue;
+                        }
+
+                        // Find the point along the line from vertices[0] to vertices[2] where the distance is equal to vertices[1].distance
+                        double k = ( vertices[1].distance - vertices[0].distance ) / ( vertices[2].distance - vertices[0].distance );
+                        double x = vertices[0].x + k * ( vertices[2].x - vertices[0].x );
+                        double y = vertices[0].y + k * ( vertices[2].y - vertices[0].y );
+                        double z = vertices[0].z + k * ( vertices[2].z - vertices[0].z );
+
+                        (double x, double y, double z, double distance)[] vertices2 = { 
+                            (x, y, z, vertices[1].distance), 
+                            vertices[0], 
+                            vertices[1] 
+                        };
+
+                        double magnitude = CalculateIntegral(vertices2, lambda, area);
+
+                        (double x, double y, double z, double distance)[] vertices3 = { 
+                            (x, y, z, vertices[1].distance), 
+                            vertices[2], 
+                            vertices[1] 
+                        };
+                        magnitude += CalculateIntegral(vertices3, lambda, area);
+                        
+                        // Store in image plane
+                        imagePlane[i, j] = (float)(magnitude * magnitude / area / area );
+                    }
+                }
+                
+                // Update the display
+                DisplayImagePlane();
+            }
+        }
+
+        private double CalculateIntegral( (double x, double y, double z, double distance)[] vertices, double lambda, double area )
+        {
+            System.Diagnostics.Trace.Assert( vertices[2].distance == vertices[0].distance );
+            System.Diagnostics.Trace.Assert( vertices[1].distance != vertices[0].distance );
+            // Find the length of triangle side from vertices[0] to vertices[2]
+            double side02 = Math.Sqrt(
+                Math.Pow(vertices[0].x - vertices[2].x, 2) +
+                Math.Pow(vertices[0].y - vertices[2].y, 2) );
+            // Altitude to side02
+            double alt = 2 * area / side02;
+            // Phase difference between vertices[2] and vertices[0]
+            double phase0 = 2 * Math.PI * vertices[0].distance / lambda;
+            double phase1 = 2 * Math.PI * vertices[1].distance / lambda;
+            // Integral of x * sin( x * (phase0 - phase1) / alt + phase1 ) for x in [0, alt]
+            // Closed form solution: ∫ x * sin(ax + b) dx = (1/a²) * (sin(ax + b) - ax * cos(ax + b))
+            double a = (phase0 - phase1) / alt;
+            double b = phase1;
+            double magnitude = (1.0 / (a * a)) * (Math.Sin(a * alt + b) - a * alt * Math.Cos(a * alt + b));
+            // Subtract the value at x=0: (1/a²) * (sin(b) - 0 * cos(b)) = (1/a²) * sin(b)
+            magnitude -= (1.0 / (a * a)) * Math.Sin(b);
+
+            return magnitude;
+        }
+        
+        private double CalculateDistance3D(double x1, double y1, double z1, double x2, double y2, double z2)
+        {
+            // Calculate 3D Euclidean distance between two points
+            double dx = x2 - x1;
+            double dy = y2 - y1;
+            double dz = z2 - z1;
+            return Math.Sqrt(dx * dx + dy * dy + dz * dz);
+        }
+        
+        private double CalculateSphericalWavefrontDepth(double x, double y, double f)
+        {
+            // Same logic as in WavefrontGenerator.GenerateSphericalWavefront
+            // Calculate the depth (z) for a point (x, y) on the spherical wavefront
+            
+            // For a spherical wavefront with focal length f:
+            // z = f - sqrt(f^2 - (x^2 + y^2))
+            // This gives the depth relative to the focal plane
+            
+            double rSquared = x * x + y * y;
+            double fSquared = f * f;
+            
+            if (rSquared >= fSquared)
+            {
+                // Point is beyond the focal length - limit the depth
+                return f;
+            }
+            
+            double depth = f - Math.Sqrt(fSquared - rSquared);
+            return depth;
+        }
     }
 }
 
