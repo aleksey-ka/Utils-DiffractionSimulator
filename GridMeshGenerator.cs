@@ -97,6 +97,18 @@ namespace DiffractionSimulator
                         return (centerI, centerJ, width, height);
                     }
                     
+                case "Triangular":
+                    {
+                        // For triangular aperture, use the circumscribing circle bounds (same as circular)
+                        double radius = D_value / 2.0; // radius in mm
+                        double radiusInPixels = radius / aperturePixelSize;
+                        
+                        double width = radiusInPixels * 2;
+                        double height = radiusInPixels * 2;
+                        
+                        return (centerI, centerJ, width, height);
+                    }
+                    
                 case "Square":
                 default:
                     {
@@ -409,29 +421,69 @@ namespace DiffractionSimulator
                     double innerRadius = (D_value * obstructionRatio / 100.0) / 2.0;
                     return distanceFromCenter <= radius && distanceFromCenter >= innerRadius;
                     
+                case "Triangular":
+                    return IsPointInTriangleGrid(x, y, D_value);
+                    
                 case "Square":
                 default:
                     return true; // Square aperture covers the entire array
             }
         }
 
+        private static bool IsPointInTriangleGrid(double x, double y, double D_value)
+        {
+            // Physical coordinates are already provided, just use them directly
+            double radius = D_value / 2.0; // radius of circumscribing circle in mm
+            
+            // Calculate triangle vertices in physical coordinates (mm) - exactly same as mask generation
+            // Left vertex (pointing leftward in physical space)
+            double vertex1X_mm = -radius; // negative X is left
+            double vertex1Y_mm = 0;
+            
+            // Bottom-left vertex 
+            double vertex2X_mm = radius / 2.0;
+            double vertex2Y_mm = -radius * Math.Sqrt(3) / 2.0;
+            
+            // Bottom-right vertex
+            double vertex3X_mm = radius / 2.0;
+            double vertex3Y_mm = radius * Math.Sqrt(3) / 2.0;
+            
+            // Use barycentric coordinates to determine if point is inside triangle
+            return IsPointInTriangleBary(x, y, vertex1X_mm, vertex1Y_mm, vertex2X_mm, vertex2Y_mm, vertex3X_mm, vertex3Y_mm);
+        }
+        
+        private static bool IsPointInTriangleBary(double px, double py, double ax, double ay, double bx, double by, double cx, double cy)
+        {
+            // Use barycentric coordinates to determine if point P is inside triangle ABC
+            double denominator = (by - cy) * (ax - cx) + (cx - bx) * (ay - cy);
+            
+            if (Math.Abs(denominator) < 1e-10) return false; // Degenerate triangle
+            
+            double alpha = ((by - cy) * (px - cx) + (cx - bx) * (py - cy)) / denominator;
+            double beta = ((cy - ay) * (px - cx) + (ax - cx) * (py - cy)) / denominator;
+            double gamma = 1 - alpha - beta;
+            
+            // Point is inside triangle if all barycentric coordinates are non-negative
+            return alpha >= 0 && beta >= 0 && gamma >= 0;
+        }
+
         private static void DrawDotAtPosition(Bitmap bitmap, double i, double j, int arraySize, Color color)
         {
-            // Convert to bitmap coordinates
-            int pixelI = (int)Math.Round(i);
-            int pixelJ = (int)Math.Round(j);
+            // Convert to bitmap coordinates - same as MainForm.cs display
+            int pixelX = (int)Math.Round(j); // j maps to x (column) - same as MainForm
+            int pixelY = (int)Math.Round(i); // i maps to y (row) - same as MainForm
             
             // Draw a 3x3 dot centered at the position
             for (int di = -1; di <= 1; di++)
             {
                 for (int dj = -1; dj <= 1; dj++)
                 {
-                    int drawI = pixelI + di;
-                    int drawJ = pixelJ + dj;
+                    int drawX = pixelX + dj;
+                    int drawY = pixelY + di;
                     
-                    if (drawI >= 0 && drawI < bitmap.Width && drawJ >= 0 && drawJ < bitmap.Height)
+                    if (drawX >= 0 && drawX < bitmap.Width && drawY >= 0 && drawY < bitmap.Height)
                     {
-                        bitmap.SetPixel(drawI, drawJ, color);
+                        bitmap.SetPixel(drawX, drawY, color);
                     }
                 }
             }
@@ -615,9 +667,9 @@ namespace DiffractionSimulator
 
         private static void DrawLine(Bitmap bitmap, (double i, double j) start, (double i, double j) end, Color color)
         {
-            // Use the same coordinate system as the original - no transformation needed since we're already in bitmap coordinates
-            int x1 = (int)Math.Round(start.j); // Note: j maps to x (column)
-            int y1 = (int)Math.Round(start.i); // Note: i maps to y (row)
+            // Use the same coordinate system as MainForm.cs display
+            int x1 = (int)Math.Round(start.j); // j maps to x (column) - same as MainForm
+            int y1 = (int)Math.Round(start.i); // i maps to y (row) - same as MainForm
             int x2 = (int)Math.Round(end.j);
             int y2 = (int)Math.Round(end.i);
             

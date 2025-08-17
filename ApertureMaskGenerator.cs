@@ -28,6 +28,9 @@ namespace DiffractionSimulator
                 case "Circular":
                     GenerateCircularAperture(apertureMask, D, sampling);
                     break;
+                case "Triangular":
+                    GenerateTriangularAperture(apertureMask, D, sampling);
+                    break;
                 case "Square":
                 default:
                     GenerateSquareAperture(apertureMask, sampling);
@@ -112,6 +115,71 @@ namespace DiffractionSimulator
                     }
                 }
             }
+        }
+        
+        private static void GenerateTriangularAperture(float[,] apertureMask, double D, double sampling)
+        {
+            // Create equilateral triangle inscribed in the same circle as the circular aperture
+            int arraySize = apertureMask.GetLength(0);
+            double aperturePixelSize = D / arraySize; // mm per pixel in aperture
+            double radius = D / 2.0; // radius of circumscribing circle in mm
+            double centerX = (arraySize - 1) / 2.0; // Center pixel for symmetric aperture
+            double centerY = (arraySize - 1) / 2.0;
+            
+            // For equilateral triangle inscribed in circle:
+            // - Vertices are at radius distance from center
+            // - First vertex points upward (negative Y direction) - vertical orientation
+            // - Vertices are separated by 120 degrees
+            
+            // Calculate triangle vertices in physical coordinates (mm) - same as circular aperture
+            // Equilateral triangle with one vertex pointing up (in physical space)
+            // Since x maps to i (vertical) and y maps to j (horizontal), we need to rotate
+            // Top vertex (pointing upward in physical space)
+            double vertex1X_mm = -radius; // negative X is left
+            double vertex1Y_mm = 0;
+            
+            // Bottom-left vertex 
+            double vertex2X_mm = radius / 2.0;
+            double vertex2Y_mm = -radius * Math.Sqrt(3) / 2.0;
+            
+            // Bottom-right vertex
+            double vertex3X_mm = radius / 2.0;
+            double vertex3Y_mm = radius * Math.Sqrt(3) / 2.0;
+            
+            for (int i = 0; i < arraySize; i++)
+            {
+                for (int j = 0; j < arraySize; j++)
+                {
+                    // Convert pixel coordinates to physical coordinates (mm) - same as circular aperture
+                    double x = (i - centerX) * aperturePixelSize;
+                    double y = (j - centerY) * aperturePixelSize;
+                    
+                    // Check if point (x, y) is inside the triangle using barycentric coordinates
+                    if (IsPointInTriangle(x, y, vertex1X_mm, vertex1Y_mm, vertex2X_mm, vertex2Y_mm, vertex3X_mm, vertex3Y_mm))
+                    {
+                        apertureMask[i, j] = 1.0f;
+                    }
+                    else
+                    {
+                        apertureMask[i, j] = 0.0f;
+                    }
+                }
+            }
+        }
+        
+        private static bool IsPointInTriangle(double px, double py, double ax, double ay, double bx, double by, double cx, double cy)
+        {
+            // Use barycentric coordinates to determine if point P is inside triangle ABC
+            double denominator = (by - cy) * (ax - cx) + (cx - bx) * (ay - cy);
+            
+            if (Math.Abs(denominator) < 1e-10) return false; // Degenerate triangle
+            
+            double alpha = ((by - cy) * (px - cx) + (cx - bx) * (py - cy)) / denominator;
+            double beta = ((cy - ay) * (px - cx) + (ax - cx) * (py - cy)) / denominator;
+            double gamma = 1 - alpha - beta;
+            
+            // Point is inside triangle if all barycentric coordinates are non-negative
+            return alpha >= 0 && beta >= 0 && gamma >= 0;
         }
     }
 }

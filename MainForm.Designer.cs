@@ -268,7 +268,7 @@ namespace DiffractionSimulator
             apertureShapeComboBox.DropDownStyle = ComboBoxStyle.DropDownList;
             apertureShapeComboBox.ForeColor = Color.White;
             apertureShapeComboBox.FormattingEnabled = true;
-            apertureShapeComboBox.Items.AddRange(new object[] { "Circular", "Square", "Circular with obstr." });
+            apertureShapeComboBox.Items.AddRange(new object[] { "Circular", "Square", "Circular with obstr.", "Triangular" });
             apertureShapeComboBox.Location = new Point(450, 582);
             apertureShapeComboBox.Name = "apertureShapeComboBox";
             apertureShapeComboBox.Size = new Size(100, 23);
