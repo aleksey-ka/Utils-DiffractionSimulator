@@ -1002,7 +1002,7 @@ namespace DiffractionSimulator
                         if( vertices[2].distance == vertices[0].distance )
                         {
                             double magnitude1 = CalculateIntegral(vertices, lambda, area);
-                            imagePlane[i, j] = 0f;//(float)(magnitude1 * magnitude1 / area / area); 
+                            imagePlane[i, j] = (float)(magnitude1 * magnitude1 / area / area); 
                             continue;
                         }
 
