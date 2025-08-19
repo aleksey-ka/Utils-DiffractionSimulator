@@ -32,7 +32,7 @@ namespace DiffractionSimulator
             if (illuminatedBounds == null) return;
             
             // Create a grid with a node exactly at the center of the aperture
-            int gridSize = 37; // Use odd number to ensure center node (changed from 12 to 13)
+            int gridSize = 13; // Use odd number to ensure center node (changed from 12 to 13)
             
             // Calculate grid spacing based on the actual illuminated area size
             double gridSpacing = Math.Min(illuminatedBounds.Value.width, illuminatedBounds.Value.height) / (gridSize - 1);
@@ -70,6 +70,69 @@ namespace DiffractionSimulator
             {
                 GenerateAndDrawTriangularMesh(bitmap, fixedArraySize, allNodes, apertureShape, D_value, obstructionRatio);
             }
+        }
+
+        /// <summary>
+        /// Generates mesh data for diffraction calculations without drawing
+        /// </summary>
+        /// <param name="apertureShape">Shape of the aperture</param>
+        /// <param name="D_value">Aperture diameter in mm</param>
+        /// <param name="obstructionRatio">Obstruction ratio for annular apertures</param>
+        /// <returns>Tuple containing nodes and triangles for diffraction calculations</returns>
+        public static (List<(double i, double j, bool isBoundary)> nodes, List<(int node1, int node2, int node3)> triangles) GenerateMeshData(string apertureShape, double D_value, double obstructionRatio)
+        {
+            // Use fixed size for grid generation - sampling should not affect grid appearance
+            int fixedArraySize = ARRAY_SIZE; // Always use the display resolution for grid
+            
+            // Calculate the center of the aperture (exact center)
+            double centerApertureI = (fixedArraySize - 1) / 2.0;
+            double centerApertureJ = (fixedArraySize - 1) / 2.0;
+            
+            // Find the illuminated area bounds to determine optimal grid spacing
+            var illuminatedBounds = FindIlluminatedBounds(fixedArraySize, apertureShape, D_value, obstructionRatio);
+            if (illuminatedBounds == null) return (new List<(double, double, bool)>(), new List<(int, int, int)>());
+            
+            // Create a grid with a node exactly at the center of the aperture
+            int gridSize = 13; // Use odd number to ensure center node
+            
+            // Calculate grid spacing based on the actual illuminated area size
+            double gridSpacing = Math.Min(illuminatedBounds.Value.width, illuminatedBounds.Value.height) / (gridSize - 1);
+            
+            // Calculate grid start positions to center the grid on the aperture center
+            double gridStartI = centerApertureI - (gridSize - 1) * gridSpacing / 2.0;
+            double gridStartJ = centerApertureJ - (gridSize - 1) * gridSpacing / 2.0;
+            
+            List<(double i, double j, bool isBoundary)> allNodes = new List<(double, double, bool)>();
+            
+            // Generate regular grid nodes inside the illuminated area
+            for (int gridI = 0; gridI < gridSize; gridI++)
+            {
+                for (int gridJ = 0; gridJ < gridSize; gridJ++)
+                {
+                    double gridI_pos = gridStartI + gridI * gridSpacing;
+                    double gridJ_pos = gridStartJ + gridJ * gridSpacing;
+                    
+                    // Only add if this exact grid position is illuminated
+                    if (IsPositionIlluminatedDirect(gridI_pos, gridJ_pos, fixedArraySize, apertureShape, D_value, obstructionRatio))
+                    {
+                        allNodes.Add((gridI_pos, gridJ_pos, false));
+                    }
+                }
+            }
+            
+            // Add additional boundary nodes around the illuminated area
+            var additionalBoundaryNodes = AddBoundaryNodesWithoutDrawing(fixedArraySize, centerApertureI, centerApertureJ, illuminatedBounds.Value, apertureShape, D_value, obstructionRatio);
+            allNodes.AddRange(additionalBoundaryNodes);
+            
+            // Generate triangles without drawing
+            List<(int node1, int node2, int node3)> triangles = new List<(int, int, int)>();
+            if (allNodes.Count >= 3)
+            {
+                triangles = GenerateDelaunayTriangulation(allNodes);
+                triangles = FilterValidTriangles(triangles, allNodes, fixedArraySize, apertureShape, D_value, obstructionRatio);
+            }
+            
+            return (allNodes, triangles);
         }
 
         private static (double centerI, double centerJ, double width, double height)? FindIlluminatedBounds(int arraySize, string apertureShape, double D_value, double obstructionRatio)
@@ -118,90 +181,59 @@ namespace DiffractionSimulator
             }
         }
 
-        private static List<(double, double, bool)> AddBoundaryNodes(Bitmap bitmap, int arraySize, double centerI, double centerJ, 
-            (double centerI, double centerJ, double width, double height) bounds, string apertureShape, double D_value, double obstructionRatio)
+        private static List<(double i, double j, bool isBoundary)> AddBoundaryNodes(Bitmap bitmap, int arraySize, double centerI, double centerJ, (double centerI, double centerJ, double width, double height) bounds, string apertureShape, double D_value, double obstructionRatio)
         {
-            List<(double, double, bool)> boundaryNodes = new List<(double, double, bool)>();
+            List<(double i, double j, bool isBoundary)> boundaryNodes = new List<(double, double, bool)>();
             
-            if (apertureShape == "Circular with obstr.")
-            {
-                // For annular apertures, we need both outer and inner boundary nodes
-                AddAnnularBoundaryNodes(bitmap, arraySize, centerI, centerJ, apertureShape, D_value, obstructionRatio, boundaryNodes);
-            }
-            else
-            {
-                // For simple circular apertures, only outer boundary
-                AddSimpleBoundaryNodes(bitmap, arraySize, centerI, centerJ, apertureShape, D_value, obstructionRatio, boundaryNodes);
-            }
+            // Create rays from center at 15-degree intervals
+            double angleStep = 15.0; // 15 degrees between rays
+            int numRays = (int)(360.0 / angleStep);
             
-            return boundaryNodes;
-        }
-        
-        private static void AddSimpleBoundaryNodes(Bitmap bitmap, int arraySize, double centerI, double centerJ, 
-            string apertureShape, double D_value, double obstructionRatio, List<(double, double, bool)> boundaryNodes)
-        {
-            // Create rays from center at 3-degree intervals for outer boundary
-            int numRays = 120; // 360 / 3 = 120 rays
-            for (int rayIndex = 0; rayIndex < numRays; rayIndex++)
+            for (int i = 0; i < numRays; i++)
             {
-                double angleDegrees = rayIndex * 3.0;
+                double angleDegrees = i * angleStep;
                 double angleRadians = angleDegrees * Math.PI / 180.0;
                 
+                // Cast ray from center and find boundary intersection - this never fails now
                 var boundaryIntersection = FindRayBoundaryIntersection(centerI, centerJ, angleRadians, arraySize, apertureShape, D_value, obstructionRatio);
                 
+                // The improved algorithm always returns a valid position
                 if (boundaryIntersection.HasValue)
                 {
                     DrawDotAtPosition(bitmap, boundaryIntersection.Value.Item1, boundaryIntersection.Value.Item2, arraySize, Color.Red);
                     boundaryNodes.Add((boundaryIntersection.Value.Item1, boundaryIntersection.Value.Item2, true));
                 }
             }
-        }
-        
-        private static void AddAnnularBoundaryNodes(Bitmap bitmap, int arraySize, double centerI, double centerJ, 
-            string apertureShape, double D_value, double obstructionRatio, List<(double, double, bool)> boundaryNodes)
-        {
-            // Calculate radii
-            double outerRadius = D_value / 2.0; // mm
-            double innerRadius = (D_value * obstructionRatio / 100.0) / 2.0; // mm
-            double aperturePixelSize = D_value / arraySize;
-            double outerRadiusPixels = outerRadius / aperturePixelSize;
-            double innerRadiusPixels = innerRadius / aperturePixelSize;
             
-            // Calculate appropriate number of rays for each boundary to maintain similar node spacing
-            int outerRays = 120; // Same density as before for outer boundary
-            int innerRays = Math.Max(12, (int)(120 * innerRadiusPixels / outerRadiusPixels)); // Scale by radius ratio, minimum 12 rays
-            
-            // Add outer boundary nodes (need special method for annular apertures)
-            for (int rayIndex = 0; rayIndex < outerRays; rayIndex++)
-            {
-                double angleDegrees = rayIndex * (360.0 / outerRays);
-                double angleRadians = angleDegrees * Math.PI / 180.0;
-                
-                var outerIntersection = FindOuterBoundaryIntersection(centerI, centerJ, angleRadians, arraySize, apertureShape, D_value, obstructionRatio);
-                
-                if (outerIntersection.HasValue)
-                {
-                    DrawDotAtPosition(bitmap, outerIntersection.Value.Item1, outerIntersection.Value.Item2, arraySize, Color.Red);
-                    boundaryNodes.Add((outerIntersection.Value.Item1, outerIntersection.Value.Item2, true));
-                }
-            }
-            
-            // Add inner boundary nodes (around the central obstruction)
-            for (int rayIndex = 0; rayIndex < innerRays; rayIndex++)
-            {
-                double angleDegrees = rayIndex * (360.0 / innerRays);
-                double angleRadians = angleDegrees * Math.PI / 180.0;
-                
-                var innerIntersection = FindInnerBoundaryIntersection(centerI, centerJ, angleRadians, arraySize, apertureShape, D_value, obstructionRatio);
-                
-                if (innerIntersection.HasValue)
-                {
-                    DrawDotAtPosition(bitmap, innerIntersection.Value.Item1, innerIntersection.Value.Item2, arraySize, Color.Red);
-                    boundaryNodes.Add((innerIntersection.Value.Item1, innerIntersection.Value.Item2, true));
-                }
-            }
+            return boundaryNodes;
         }
 
+        private static List<(double i, double j, bool isBoundary)> AddBoundaryNodesWithoutDrawing(int arraySize, double centerI, double centerJ, (double centerI, double centerJ, double width, double height) bounds, string apertureShape, double D_value, double obstructionRatio)
+        {
+            List<(double i, double j, bool isBoundary)> boundaryNodes = new List<(double, double, bool)>();
+            
+            // Create rays from center at 15-degree intervals
+            double angleStep = 15.0; // 15 degrees between rays
+            int numRays = (int)(360.0 / angleStep);
+            
+            for (int i = 0; i < numRays; i++)
+            {
+                double angleDegrees = i * angleStep;
+                double angleRadians = angleDegrees * Math.PI / 180.0;
+                
+                // Cast ray from center and find boundary intersection - this never fails now
+                var boundaryIntersection = FindRayBoundaryIntersection(centerI, centerJ, angleRadians, arraySize, apertureShape, D_value, obstructionRatio);
+                
+                // The improved algorithm always returns a valid position
+                if (boundaryIntersection.HasValue)
+                {
+                    boundaryNodes.Add((boundaryIntersection.Value.Item1, boundaryIntersection.Value.Item2, true));
+                }
+            }
+            
+            return boundaryNodes;
+        }
+        
         private static (double, double)? FindRayBoundaryIntersection(double centerI, double centerJ, double angleRadians, int arraySize, string apertureShape, double D_value, double obstructionRatio)
         {
             double dirI = Math.Cos(angleRadians);

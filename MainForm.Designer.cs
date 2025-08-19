@@ -54,6 +54,7 @@ namespace DiffractionSimulator
             gridComboBox = new ComboBox();
             triangularDiffractionButton = new Button();
             squareDiffractionButton = new Button();
+            meshDiffractionButton = new Button();
             ((System.ComponentModel.ISupportInitialize)apperturePictureBox).BeginInit();
             ((System.ComponentModel.ISupportInitialize)imagePlanePictureBox).BeginInit();
             ((System.ComponentModel.ISupportInitialize)D_numericUpDown).BeginInit();
@@ -360,6 +361,19 @@ namespace DiffractionSimulator
             squareDiffractionButton.UseVisualStyleBackColor = false;
             squareDiffractionButton.Click += SquareDiffractionButton_Click;
             // 
+            // meshDiffractionButton
+            // 
+            meshDiffractionButton.BackColor = Color.FromArgb(64, 64, 64);
+            meshDiffractionButton.FlatStyle = FlatStyle.Flat;
+            meshDiffractionButton.ForeColor = Color.White;
+            meshDiffractionButton.Location = new Point(600, 747);
+            meshDiffractionButton.Name = "meshDiffractionButton";
+            meshDiffractionButton.Size = new Size(188, 39);
+            meshDiffractionButton.TabIndex = 24;
+            meshDiffractionButton.Text = "Mesh Diffraction";
+            meshDiffractionButton.UseVisualStyleBackColor = false;
+            meshDiffractionButton.Click += MeshDiffractionButton_Click;
+            // 
             // MainForm
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
@@ -392,6 +406,7 @@ namespace DiffractionSimulator
             Controls.Add(obstructionRatioNumericUpDown);
             Controls.Add(triangularDiffractionButton);
             Controls.Add(squareDiffractionButton);
+            Controls.Add(meshDiffractionButton);
             ForeColor = Color.White;
             Name = "MainForm";
             Text = "Diffraction Simulator";
@@ -435,5 +450,6 @@ namespace DiffractionSimulator
         private ComboBox gridComboBox;
         private Button triangularDiffractionButton;
         private Button squareDiffractionButton;
+        private Button meshDiffractionButton;
     }
 }

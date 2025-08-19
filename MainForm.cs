@@ -1109,6 +1109,121 @@ namespace DiffractionSimulator
         }
 
 
+        private void MeshDiffractionButton_Click(object sender, EventArgs e)
+        {
+            // Check if orthogonal grid is selected
+            string selectedGrid = gridComboBox.SelectedItem?.ToString() ?? "None";
+            if (selectedGrid != "Orthogonal")
+            {
+                MessageBox.Show("Please select 'Orthogonal' grid type first.", "Invalid Grid", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+            
+            // Get the current aperture parameters
+            string selectedShape = apertureShapeComboBox.SelectedItem?.ToString() ?? "Circular";
+            double D_value = (double)D_numericUpDown.Value;
+            double f_value = (double)f_numericUpDown.Value;
+            double lambda_value = (double)lambda_numericUpDown.Value;
+            double imagePlaneSize_value = (double)imagePlaneSize_numericUpDown.Value;
+            double obstructionRatio = (double)obstructionRatioNumericUpDown.Value;
+            
+            // Generate mesh data
+            var (nodes, triangles) = GridMeshGenerator.GenerateMeshData(selectedShape, D_value, obstructionRatio);
+            
+            if (triangles.Count == 0)
+            {
+                MessageBox.Show("No valid triangles found in the mesh. Please check aperture parameters.", "Mesh Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+            
+            // Call the mesh diffraction calculation method
+            CalculateMeshDiffraction(nodes, triangles, D_value, f_value, lambda_value, imagePlaneSize_value);
+        }
+        
+        private void CalculateMeshDiffraction(List<(double i, double j, bool isBoundary)> nodes, 
+            List<(int node1, int node2, int node3)> triangles,
+            double D, double f, double lambda, double imagePlaneSize)
+        {
+            // Calculate image plane pixel coordinates to physical coordinates (mm)
+            double imagePixelSize = imagePlaneSize / ARRAY_SIZE;
+            int imageCenterX = ARRAY_SIZE / 2 + 1;
+            int imageCenterY = ARRAY_SIZE / 2 + 1;
+            
+            // Calculate aperture pixel size for coordinate conversion
+            double aperturePixelSize = D / ARRAY_SIZE; // mm per pixel in aperture
+            
+            if (imagePlane != null)
+            {
+                // Clear the image plane first
+                for (int i = 0; i < ARRAY_SIZE; i++)
+                {
+                    for (int j = 0; j < ARRAY_SIZE; j++)
+                    {
+                        imagePlane[i, j] = 0.0f;
+                    }
+                }
+                
+                // Process each triangle in the mesh
+                for (int i = 0; i < ARRAY_SIZE; i++)
+                {
+                    for (int j = 0; j < ARRAY_SIZE; j++)
+                    {
+                        double imageX = (i - imageCenterX) * imagePixelSize;
+                        double imageY = (j - imageCenterY) * imagePixelSize;
+                        
+                        // Complex field at this image point
+                        Complex totalField = Complex.Zero;
+                        
+                        // Sum contributions from all triangles
+                        foreach (var triangle in triangles)
+                        {
+                            var node1 = nodes[triangle.node1];
+                            var node2 = nodes[triangle.node2];
+                            var node3 = nodes[triangle.node3];
+                            
+                            // Convert node coordinates from pixels to mm
+                            double v1x = (node1.i - ARRAY_SIZE / 2.0) * aperturePixelSize;
+                            double v1y = (node1.j - ARRAY_SIZE / 2.0) * aperturePixelSize;
+                            double v2x = (node2.i - ARRAY_SIZE / 2.0) * aperturePixelSize;
+                            double v2y = (node2.j - ARRAY_SIZE / 2.0) * aperturePixelSize;
+                            double v3x = (node3.i - ARRAY_SIZE / 2.0) * aperturePixelSize;
+                            double v3y = (node3.j - ARRAY_SIZE / 2.0) * aperturePixelSize;
+                            
+                            // Calculate z-values (depth) for each vertex using spherical wavefront
+                            double v1z = DiffractionCalculator.CalculateSphericalWavefrontDepth(v1x, v1y, f);
+                            double v2z = DiffractionCalculator.CalculateSphericalWavefrontDepth(v2x, v2y, f);
+                            double v3z = DiffractionCalculator.CalculateSphericalWavefrontDepth(v3x, v3y, f);
+                            
+                            // Calculate distances from this image plane pixel to each vertex
+                            double distance1 = DiffractionCalculator.CalculateDistance3D(imageX, imageY, f, v1x, v1y, v1z);
+                            double distance2 = DiffractionCalculator.CalculateDistance3D(imageX, imageY, f, v2x, v2y, v2z);
+                            double distance3 = DiffractionCalculator.CalculateDistance3D(imageX, imageY, f, v3x, v3y, v3z);
+
+                            // Create vertices array for triangular patch integral
+                            (double x, double y, double z, double distance)[] vertices = { 
+                                (v1x, v1y, v1z, distance1), 
+                                (v2x, v2y, v2z, distance2), 
+                                (v3x, v3y, v3z, distance3)
+                            };
+
+                            // Calculate field contribution from this triangle
+                            var triangleField = DiffractionCalculator.CalculateTriangularPatchIntegral(vertices, lambda);
+                            
+                            // Add to total field
+                            totalField += triangleField;
+                        }
+                        
+                        // Calculate intensity (magnitude squared) from total field
+                        imagePlane[i, j] = (float)(totalField.Real * totalField.Real + totalField.Imaginary * totalField.Imaginary);
+                    }
+                }
+                
+                // Update the display
+                DisplayImagePlane();
+            }
+        }
+
+
     }
 }
 
