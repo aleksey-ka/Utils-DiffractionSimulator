@@ -996,9 +996,6 @@ namespace DiffractionSimulator
                         imagePlane[i, j] = (float)(field.Real * field.Real + field.Imaginary * field.Imaginary);
                     }
                 }
-                Trace.WriteLine( $"Intensity at [0,0] is {imagePlane[imageCenterX, imageCenterY]}" );
-                Trace.WriteLine( $"Intensity at [1,1] is {imagePlane[imageCenterX + 1, imageCenterY + 1]}" );
-                Trace.WriteLine( $"Intensity at [5,5] is {imagePlane[imageCenterX + 5, imageCenterY + 5]}" );
                 
                 // Update the display
                 DisplayImagePlane();
