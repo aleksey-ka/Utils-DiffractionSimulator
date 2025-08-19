@@ -194,14 +194,34 @@ namespace DiffractionSimulator
                 double angleDegrees = i * angleStep;
                 double angleRadians = angleDegrees * Math.PI / 180.0;
                 
-                // Cast ray from center and find boundary intersection - this never fails now
-                var boundaryIntersection = FindRayBoundaryIntersection(centerI, centerJ, angleRadians, arraySize, apertureShape, D_value, obstructionRatio);
-                
-                // The improved algorithm always returns a valid position
-                if (boundaryIntersection.HasValue)
+                if (apertureShape == "Circular with obstr.")
                 {
-                    DrawDotAtPosition(bitmap, boundaryIntersection.Value.Item1, boundaryIntersection.Value.Item2, arraySize, Color.Red);
-                    boundaryNodes.Add((boundaryIntersection.Value.Item1, boundaryIntersection.Value.Item2, true));
+                    // For annular apertures, find both inner and outer boundaries
+                    var innerBoundary = FindInnerBoundaryIntersection(centerI, centerJ, angleRadians, arraySize, apertureShape, D_value, obstructionRatio);
+                    var outerBoundary = FindOuterBoundaryIntersection(centerI, centerJ, angleRadians, arraySize, apertureShape, D_value, obstructionRatio);
+                    
+                    if (innerBoundary.HasValue)
+                    {
+                        DrawDotAtPosition(bitmap, innerBoundary.Value.Item1, innerBoundary.Value.Item2, arraySize, Color.Blue);
+                        boundaryNodes.Add((innerBoundary.Value.Item1, innerBoundary.Value.Item2, true));
+                    }
+                    
+                    if (outerBoundary.HasValue)
+                    {
+                        DrawDotAtPosition(bitmap, outerBoundary.Value.Item1, outerBoundary.Value.Item2, arraySize, Color.Red);
+                        boundaryNodes.Add((outerBoundary.Value.Item1, outerBoundary.Value.Item2, true));
+                    }
+                }
+                else
+                {
+                    // For other apertures, use the original method
+                    var boundaryIntersection = FindRayBoundaryIntersection(centerI, centerJ, angleRadians, arraySize, apertureShape, D_value, obstructionRatio);
+                    
+                    if (boundaryIntersection.HasValue)
+                    {
+                        DrawDotAtPosition(bitmap, boundaryIntersection.Value.Item1, boundaryIntersection.Value.Item2, arraySize, Color.Red);
+                        boundaryNodes.Add((boundaryIntersection.Value.Item1, boundaryIntersection.Value.Item2, true));
+                    }
                 }
             }
             
@@ -221,13 +241,31 @@ namespace DiffractionSimulator
                 double angleDegrees = i * angleStep;
                 double angleRadians = angleDegrees * Math.PI / 180.0;
                 
-                // Cast ray from center and find boundary intersection - this never fails now
-                var boundaryIntersection = FindRayBoundaryIntersection(centerI, centerJ, angleRadians, arraySize, apertureShape, D_value, obstructionRatio);
-                
-                // The improved algorithm always returns a valid position
-                if (boundaryIntersection.HasValue)
+                if (apertureShape == "Circular with obstr.")
                 {
-                    boundaryNodes.Add((boundaryIntersection.Value.Item1, boundaryIntersection.Value.Item2, true));
+                    // For annular apertures, find both inner and outer boundaries
+                    var innerBoundary = FindInnerBoundaryIntersection(centerI, centerJ, angleRadians, arraySize, apertureShape, D_value, obstructionRatio);
+                    var outerBoundary = FindOuterBoundaryIntersection(centerI, centerJ, angleRadians, arraySize, apertureShape, D_value, obstructionRatio);
+                    
+                    if (innerBoundary.HasValue)
+                    {
+                        boundaryNodes.Add((innerBoundary.Value.Item1, innerBoundary.Value.Item2, true));
+                    }
+                    
+                    if (outerBoundary.HasValue)
+                    {
+                        boundaryNodes.Add((outerBoundary.Value.Item1, outerBoundary.Value.Item2, true));
+                    }
+                }
+                else
+                {
+                    // For other apertures, use the original method
+                    var boundaryIntersection = FindRayBoundaryIntersection(centerI, centerJ, angleRadians, arraySize, apertureShape, D_value, obstructionRatio);
+                    
+                    if (boundaryIntersection.HasValue)
+                    {
+                        boundaryNodes.Add((boundaryIntersection.Value.Item1, boundaryIntersection.Value.Item2, true));
+                    }
                 }
             }
             
