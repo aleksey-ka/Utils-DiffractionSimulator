@@ -1003,6 +1003,112 @@ namespace DiffractionSimulator
         }
 
 
+        private void SquareDiffractionButton_Click(object sender, EventArgs e)
+        {
+            // Get the current square aperture parameters
+            string selectedShape = apertureShapeComboBox.SelectedItem?.ToString() ?? "Circular";
+            if (selectedShape != "Square")
+            {
+                MessageBox.Show("Please select 'Square' aperture shape first.", "Invalid Aperture", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+            
+            // Get physical parameters
+            double D_value = (double)D_numericUpDown.Value;
+            double f_value = (double)f_numericUpDown.Value;
+            double lambda_value = (double)lambda_numericUpDown.Value;
+            double imagePlaneSize_value = (double)imagePlaneSize_numericUpDown.Value;
+            
+            // Calculate square vertices (same as in ApertureMaskGenerator)
+            double halfSize = D_value / 2.0; // half-size of the square in mm
+            
+            // Top-left vertex
+            double vertex1X_mm = -halfSize;
+            double vertex1Y_mm = -halfSize;
+            
+            // Top-right vertex
+            double vertex2X_mm = halfSize;
+            double vertex2Y_mm = -halfSize;
+            
+            // Bottom-right vertex
+            double vertex3X_mm = halfSize;
+            double vertex3Y_mm = halfSize;
+            
+            // Bottom-left vertex
+            double vertex4X_mm = -halfSize;
+            double vertex4Y_mm = halfSize;
+            
+            // Call the square diffraction calculation method
+            CalculateSquareDiffraction(vertex1X_mm, vertex1Y_mm, vertex2X_mm, vertex2Y_mm, 
+                vertex3X_mm, vertex3Y_mm, vertex4X_mm, vertex4Y_mm,
+                D_value, f_value, lambda_value, imagePlaneSize_value);
+        }
+        
+        private void CalculateSquareDiffraction(double v1x, double v1y, double v2x, double v2y, 
+            double v3x, double v3y, double v4x, double v4y,
+            double D, double f, double lambda, double imagePlaneSize)
+        {
+            // Calculate z-values (depth) for each vertex using the same spherical wavefront logic
+            // as used in WavefrontGenerator.GenerateSphericalWavefront
+            
+            // Calculate depth for each vertex using the spherical wavefront formula
+            double v1z = DiffractionCalculator.CalculateSphericalWavefrontDepth(v1x, v1y, f);
+            double v2z = DiffractionCalculator.CalculateSphericalWavefrontDepth(v2x, v2y, f);
+            double v3z = DiffractionCalculator.CalculateSphericalWavefrontDepth(v3x, v3y, f);
+            double v4z = DiffractionCalculator.CalculateSphericalWavefrontDepth(v4x, v4y, f);
+
+            // Calculate image plane pixel coordinates to physical coordinates (mm)
+            double imagePixelSize = imagePlaneSize / ARRAY_SIZE;
+            int imageCenterX = ARRAY_SIZE / 2 + 1;
+            int imageCenterY = ARRAY_SIZE / 2 + 1;
+            
+            if (imagePlane != null)
+            {
+                for (int i = 0; i < ARRAY_SIZE; i++)
+                {
+                    for (int j = 0; j < ARRAY_SIZE; j++)
+                    {
+                        double imageX = (i - imageCenterX) * imagePixelSize;
+                        double imageY = (j - imageCenterY) * imagePixelSize;
+                        
+                        // Calculate distances from this image plane pixel to each vertex
+                        double distance1 = DiffractionCalculator.CalculateDistance3D(imageX, imageY, f, v1x, v1y, v1z);
+                        double distance2 = DiffractionCalculator.CalculateDistance3D(imageX, imageY, f, v2x, v2y, v2z);
+                        double distance3 = DiffractionCalculator.CalculateDistance3D(imageX, imageY, f, v3x, v3y, v3z);
+                        double distance4 = DiffractionCalculator.CalculateDistance3D(imageX, imageY, f, v4x, v4y, v4z);
+
+                        // First triangle: v1, v2, v3 (top-left, top-right, bottom-right)
+                        (double x, double y, double z, double distance)[] triangle1 = { 
+                            (v1x, v1y, v1z, distance1), 
+                            (v2x, v2y, v2z, distance2), 
+                            (v3x, v3y, v3z, distance3)
+                        };
+
+                        // Second triangle: v1, v3, v4 (top-left, bottom-right, bottom-left)
+                        (double x, double y, double z, double distance)[] triangle2 = { 
+                            (v1x, v1y, v1z, distance1), 
+                            (v3x, v3y, v3z, distance3), 
+                            (v4x, v4y, v4z, distance4)
+                        };
+
+                        // Calculate field contributions from both triangles
+                        var field1 = DiffractionCalculator.CalculateTriangularPatchIntegral(triangle1, lambda);
+                        var field2 = DiffractionCalculator.CalculateTriangularPatchIntegral(triangle2, lambda);
+
+                        // Combine the fields from both triangles
+                        var combinedField = field1 + field2;
+
+                        // Calculate intensity (magnitude squared)
+                        imagePlane[i, j] = (float)(combinedField.Real * combinedField.Real + combinedField.Imaginary * combinedField.Imaginary);
+                    }
+                }
+                
+                // Update the display
+                DisplayImagePlane();
+            }
+        }
+
+
     }
 }
 

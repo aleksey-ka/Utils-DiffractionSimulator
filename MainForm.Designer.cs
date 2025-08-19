@@ -53,6 +53,7 @@ namespace DiffractionSimulator
             grid_label = new Label();
             gridComboBox = new ComboBox();
             triangularDiffractionButton = new Button();
+            squareDiffractionButton = new Button();
             ((System.ComponentModel.ISupportInitialize)apperturePictureBox).BeginInit();
             ((System.ComponentModel.ISupportInitialize)imagePlanePictureBox).BeginInit();
             ((System.ComponentModel.ISupportInitialize)D_numericUpDown).BeginInit();
@@ -338,13 +339,26 @@ namespace DiffractionSimulator
             triangularDiffractionButton.BackColor = Color.FromArgb(64, 64, 64);
             triangularDiffractionButton.FlatStyle = FlatStyle.Flat;
             triangularDiffractionButton.ForeColor = Color.White;
-            triangularDiffractionButton.Location = new Point(880, 650);
+            triangularDiffractionButton.Location = new Point(600, 649);
             triangularDiffractionButton.Name = "triangularDiffractionButton";
-            triangularDiffractionButton.Size = new Size(120, 39);
+            triangularDiffractionButton.Size = new Size(188, 39);
             triangularDiffractionButton.TabIndex = 22;
             triangularDiffractionButton.Text = "Triangular Diffraction";
             triangularDiffractionButton.UseVisualStyleBackColor = false;
             triangularDiffractionButton.Click += TriangularDiffractionButton_Click;
+            // 
+            // squareDiffractionButton
+            // 
+            squareDiffractionButton.BackColor = Color.FromArgb(64, 64, 64);
+            squareDiffractionButton.FlatStyle = FlatStyle.Flat;
+            squareDiffractionButton.ForeColor = Color.White;
+            squareDiffractionButton.Location = new Point(600, 698);
+            squareDiffractionButton.Name = "squareDiffractionButton";
+            squareDiffractionButton.Size = new Size(188, 39);
+            squareDiffractionButton.TabIndex = 23;
+            squareDiffractionButton.Text = "Square Diffraction";
+            squareDiffractionButton.UseVisualStyleBackColor = false;
+            squareDiffractionButton.Click += SquareDiffractionButton_Click;
             // 
             // MainForm
             // 
@@ -377,6 +391,7 @@ namespace DiffractionSimulator
             Controls.Add(obstructionRatio_label);
             Controls.Add(obstructionRatioNumericUpDown);
             Controls.Add(triangularDiffractionButton);
+            Controls.Add(squareDiffractionButton);
             ForeColor = Color.White;
             Name = "MainForm";
             Text = "Diffraction Simulator";
@@ -419,5 +434,6 @@ namespace DiffractionSimulator
         private Label grid_label;
         private ComboBox gridComboBox;
         private Button triangularDiffractionButton;
+        private Button squareDiffractionButton;
     }
 }
