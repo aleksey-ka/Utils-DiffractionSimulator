@@ -1027,7 +1027,7 @@ namespace DiffractionSimulator
             double y = vertices[0].y + k * ( vertices[2].y - vertices[0].y );
             double z = vertices[0].z + k * ( vertices[2].z - vertices[0].z );
 
-            // Devide the triangle into two along the line of equal distance
+            // Divide the triangle into two along the line of equal distance
             (double x, double y, double z, double distance)[] vertices1 = { 
                 (x, y, z, vertices[1].distance), 
                 vertices[0], 
@@ -1064,13 +1064,14 @@ namespace DiffractionSimulator
                 return new Complex( area * Math.Cos( P ), area * Math.Sin( P ) );
             }
 
-            // Real part will be integral of x * cos( dP / alt * x  + P1 ) for x in [0, alt]
-            // Closed form solution: ∫ x * cos(ax + b) dx = (1/a²) * (cos(ax + b) + ax * sin(ax + b))
+            // Real part: integral of x * cos((dP/alt) * x + P1) for x in [0, alt]
+            // Closed form: ∫ x * cos(ax + b) dx = (1/a²) * (cos(ax + b) + ax * sin(ax + b))
 
-            // Imaginary part will be integral of x * sin( dP / alt x + P1 ) for x in [0, alt]
-            // Closed form solution: ∫ x * sin(ax + b) dx = (1/a²) * (sin(ax + b) - ax * cos(ax + b))
+            // Imaginary part: integral of x * sin((dP/alt) * x + P1) for x in [0, alt]  
+            // Closed form: ∫ x * sin(ax + b) dx = (1/a²) * (sin(ax + b) - ax * cos(ax + b))
 
-            // Where alt is the altitude of the tiangle to side [0,2], integration is along this altitude
+            // Where 'alt' is the altitude of the triangle to side [0,2], 
+            // integration is along this altitude
 
             double A = 2 * area / (dP * dP);
             
