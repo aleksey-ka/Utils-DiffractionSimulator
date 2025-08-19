@@ -1,5 +1,5 @@
-using System;
 using System.Diagnostics;
+using System.Numerics;
 
 namespace DiffractionSimulator
 {
@@ -217,6 +217,125 @@ namespace DiffractionSimulator
             }
             
             return imagePlane;
+        }
+        
+        /// <summary>
+        /// Calculates the integral over a triangular patch using the triangular decomposition method
+        /// </summary>
+        /// <param name="vertices">Array of 3 vertices with coordinates and distances</param>
+        /// <param name="lambda">Wavelength</param>
+        /// <returns>Complex field contribution from the triangular patch</returns>
+        public static Complex CalculateTriangularPatchIntegral((double x, double y, double z, double distance)[] vertices, double lambda)
+        {
+            // Sort the vertices by distance
+            Array.Sort(vertices, (a, b) => a.distance.CompareTo(b.distance));
+            
+            if (Math.Abs(vertices[2].distance - vertices[0].distance) < double.Epsilon)
+            {
+                // Area of the triangle
+                double area = 0.5 * Math.Abs(vertices[0].x * (vertices[1].y - vertices[2].y) +
+                vertices[1].x * (vertices[2].y - vertices[0].y) + vertices[2].x * (vertices[0].y - vertices[1].y));
+                // Phase
+                double P0 = 2 * Math.PI * vertices[0].distance / lambda;
+                double P2 = 2 * Math.PI * vertices[2].distance / lambda;
+                double P = (P0 + P2) / 2;
+                return new Complex(area * Math.Cos(P), area * Math.Sin(P));
+            }
+
+            // Find a point along the line from vertices[0] to vertices[2] where the distance is equal to vertices[1].distance
+            double k = (vertices[1].distance - vertices[0].distance) / (vertices[2].distance - vertices[0].distance);
+            double x = vertices[0].x + k * (vertices[2].x - vertices[0].x);
+            double y = vertices[0].y + k * (vertices[2].y - vertices[0].y);
+            double z = vertices[0].z + k * (vertices[2].z - vertices[0].z);
+
+            // Divide the triangle into two along the line of equal distance
+            (double x, double y, double z, double distance)[] vertices1 = {
+                (x, y, z, vertices[1].distance),
+                vertices[0],
+                vertices[1]
+            };
+
+            (double x, double y, double z, double distance)[] vertices2 = {
+                vertices[1],
+                vertices[2],
+                (x, y, z, vertices[1].distance)
+            };
+
+            return CalculateComplexIntegral(vertices1, lambda) + CalculateComplexIntegral(vertices2, lambda);
+        }
+        
+        /// <summary>
+        /// Calculates the complex integral over a triangle with vertices at different distances
+        /// </summary>
+        /// <param name="vertices">Array of 3 vertices with coordinates and distances</param>
+        /// <param name="lambda">Wavelength</param>
+        /// <returns>Complex field contribution from the triangle</returns>
+        public static Complex CalculateComplexIntegral((double x, double y, double z, double distance)[] vertices, double lambda)
+        {
+            // Expecting that vertices[0] and vertices[2] are at the same distance
+            
+            // Area of the triangle
+            double area = 0.5 * Math.Abs(vertices[0].x * (vertices[1].y - vertices[2].y) +
+                vertices[1].x * (vertices[2].y - vertices[0].y) + vertices[2].x * (vertices[0].y - vertices[1].y));
+            
+            // Phases at vertices[2] and vertices[0]
+            double P0 = 2 * Math.PI * vertices[0].distance / lambda;
+            double P1 = 2 * Math.PI * vertices[1].distance / lambda;
+
+            // Phase difference
+            double dP = P0 - P1;
+            
+            // Handle the case where phases are nearly equal (dP ≈ 0)
+            if (Math.Abs(dP) < double.Epsilon)
+            {
+                double P = (P0 + P1) / 2;
+                return new Complex(area * Math.Cos(P), area * Math.Sin(P));
+            }
+
+            // Real part: integral of x * cos((dP/alt) * x + P1) for x in [0, alt]
+            // Closed form: ∫ x * cos(ax + b) dx = (1/a²) * (cos(ax + b) + ax * sin(ax + b))
+
+            // Imaginary part: integral of x * sin((dP/alt) * x + P1) for x in [0, alt]  
+            // Closed form: ∫ x * sin(ax + b) dx = (1/a²) * (sin(ax + b) - ax * cos(ax + b))
+
+            // Where 'alt' is the altitude of the triangle to side [0,2], 
+            // integration is along this altitude
+
+            double A = 2 * area / (dP * dP);
+            
+            double realPart = A * (Math.Cos(P0) - Math.Cos(P1) + dP * Math.Sin(P0));
+            double imagPart = A * (Math.Sin(P0) - Math.Sin(P1) - dP * Math.Cos(P0));
+
+            return new Complex(realPart, imagPart);
+        }
+        
+        /// <summary>
+        /// Calculates 3D Euclidean distance between two points
+        /// </summary>
+        public static double CalculateDistance3D(double x1, double y1, double z1, double x2, double y2, double z2)
+        {
+            double dx = x2 - x1;
+            double dy = y2 - y1;
+            double dz = z2 - z1;
+            return Math.Sqrt(dx * dx + dy * dy + dz * dz);
+        }
+        
+        /// <summary>
+        /// Calculates the depth of a spherical wavefront at given coordinates
+        /// </summary>
+        public static double CalculateSphericalWavefrontDepth(double x, double y, double f)
+        {
+            double rSquared = x * x + y * y;
+            double fSquared = f * f;
+            
+            if (rSquared >= fSquared)
+            {
+                // Point is beyond the focal length - limit the depth
+                return f;
+            }
+            
+            double depth = f - Math.Sqrt(fSquared - rSquared);
+            return depth;
         }
     }
 }
