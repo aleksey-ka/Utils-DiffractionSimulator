@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 
 namespace DiffractionSimulator
 {
@@ -122,6 +123,8 @@ namespace DiffractionSimulator
                     imagePlane[imgI, imgJ] = intensity;
                 }
             }
+
+            Trace.WriteLine( $"Intensity at [0,0] is {imagePlane[ARRAY_SIZE / 2 + 1, ARRAY_SIZE / 2 + 1]}" );
             
             return imagePlane;
         }

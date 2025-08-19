@@ -3,6 +3,7 @@ using System.Drawing.Imaging;
 using System.Globalization;
 using System.Linq;
 using System.Diagnostics;
+using System.Numerics;
 
 namespace DiffractionSimulator
 {
@@ -964,6 +965,11 @@ namespace DiffractionSimulator
 
             // Calculate the area of the triangle (in aperture plane)
             double area = 0.5 * Math.Abs(v1x * (v2y - v3y) + v2x * (v3y - v1y) + v3x * (v1y - v2y));
+
+            // Calculate image plane pixel coordinates to physical coordinates (mm)
+            double imagePixelSize = imagePlaneSize / ARRAY_SIZE;
+            int imageCenterX = ARRAY_SIZE / 2 + 1;
+            int imageCenterY = ARRAY_SIZE / 2 + 1;
             
             if (imagePlane != null)
             {
@@ -971,11 +977,6 @@ namespace DiffractionSimulator
                 {
                     for (int j = 0; j < ARRAY_SIZE; j++)
                     {
-                        // Calculate image plane pixel coordinates to physical coordinates (mm)
-                        double imagePixelSize = imagePlaneSize / ARRAY_SIZE;
-                        double imageCenterX = (ARRAY_SIZE - 1) / 2.0;
-                        double imageCenterY = (ARRAY_SIZE - 1) / 2.0;
-                        
                         double imageX = (i - imageCenterX) * imagePixelSize;
                         double imageY = (j - imageCenterY) * imagePixelSize;
                         
@@ -984,107 +985,99 @@ namespace DiffractionSimulator
                         double distance2 = CalculateDistance3D(imageX, imageY, f, v2x, v2y, v2z);
                         double distance3 = CalculateDistance3D(imageX, imageY, f, v3x, v3y, v3z);
 
-                        if( distance1 == distance2 && distance2 == distance3 )
-                        {
-                            // Normalized intensity
-                            imagePlane[i, j] = 1.0f;
-                            continue;
-                        }
-
-                        // Sort the vertices by distance
                         (double x, double y, double z, double distance)[] vertices = { 
                             (v1x, v1y, v1z, distance1), 
                             (v2x, v2y, v2z, distance2), 
-                            (v3x, v3y, v3z, distance3) 
-                        };
-                        Array.Sort(vertices, (a, b) => a.distance.CompareTo(b.distance));
-
-                        if( vertices[2].distance == vertices[0].distance )
-                        {
-                            double magnitude1 = CalculateIntegral(vertices, lambda, area);
-                            imagePlane[i, j] = (float)(magnitude1 * magnitude1 / area / area); 
-                            continue;
-                        }
-
-                        if( vertices[1].distance == vertices[0].distance )
-                        {
-                            (double x, double y, double z, double distance)[] vertices0 = {
-                                vertices[1],     
-                                vertices[2],
-                                vertices[0]
-                            };
-
-                            double magnitude1 = CalculateIntegral( vertices0, lambda, area);
-                            imagePlane[i, j] = (float)(magnitude1 * magnitude1 / area / area); 
-                            continue;
-                        }
-
-                        if( vertices[2].distance == vertices[1].distance )
-                        {
-                            (double x, double y, double z, double distance)[] vertices0 = {
-                                vertices[2],     
-                                vertices[0],
-                                vertices[1]
-                            };
-
-                            double magnitude1 = CalculateIntegral( vertices0, lambda, area);
-                            imagePlane[i, j] = (float)(magnitude1 * magnitude1 / area / area); 
-                            continue;
-                        }
-
-                        // Find the point along the line from vertices[0] to vertices[2] where the distance is equal to vertices[1].distance
-                        double k = ( vertices[1].distance - vertices[0].distance ) / ( vertices[2].distance - vertices[0].distance );
-                        double x = vertices[0].x + k * ( vertices[2].x - vertices[0].x );
-                        double y = vertices[0].y + k * ( vertices[2].y - vertices[0].y );
-                        double z = vertices[0].z + k * ( vertices[2].z - vertices[0].z );
-
-                        (double x, double y, double z, double distance)[] vertices2 = { 
-                            (x, y, z, vertices[1].distance), 
-                            vertices[0], 
-                            vertices[1] 
+                            (v3x, v3y, v3z, distance3)
                         };
 
-                        double magnitude = CalculateIntegral(vertices2, lambda, area);
+                        var field = CalculateTriangularPatchIntegral( vertices, lambda );
 
-                        (double x, double y, double z, double distance)[] vertices3 = { 
-                            (x, y, z, vertices[1].distance), 
-                            vertices[2], 
-                            vertices[1] 
-                        };
-                        magnitude += CalculateIntegral(vertices3, lambda, area);
-                        
-                        // Store in image plane
-                        imagePlane[i, j] = (float)(magnitude * magnitude / area / area );
+                        imagePlane[i, j] = (float)(field.Real * field.Real + field.Imaginary * field.Imaginary);
                     }
                 }
+                Trace.WriteLine( $"Intensity at [0,0] is {imagePlane[imageCenterX, imageCenterY]}" );
+                Trace.WriteLine( $"Intensity at [1,1] is {imagePlane[imageCenterX + 1, imageCenterY + 1]}" );
+                Trace.WriteLine( $"Intensity at [5,5] is {imagePlane[imageCenterX + 5, imageCenterY + 5]}" );
                 
                 // Update the display
                 DisplayImagePlane();
             }
         }
 
-        private double CalculateIntegral( (double x, double y, double z, double distance)[] vertices, double lambda, double area )
+        private Complex CalculateTriangularPatchIntegral( (double x, double y, double z, double distance)[] vertices, double lambda )
         {
-            System.Diagnostics.Trace.Assert( vertices[2].distance == vertices[0].distance );
-            System.Diagnostics.Trace.Assert( vertices[1].distance != vertices[0].distance );
-            // Find the length of triangle side from vertices[0] to vertices[2]
-            double side02 = Math.Sqrt(
-                Math.Pow(vertices[0].x - vertices[2].x, 2) +
-                Math.Pow(vertices[0].y - vertices[2].y, 2) );
-            // Altitude to side02
-            double alt = 2 * area / side02;
-            // Phase difference between vertices[2] and vertices[0]
-            double phase0 = 2 * Math.PI * vertices[0].distance / lambda;
-            double phase1 = 2 * Math.PI * vertices[1].distance / lambda;
-            // Integral of x * sin( x * (phase0 - phase1) / alt + phase1 ) for x in [0, alt]
-            // Closed form solution: ∫ x * sin(ax + b) dx = (1/a²) * (sin(ax + b) - ax * cos(ax + b))
-            double a = (phase0 - phase1) / alt;
-            double b = phase1;
-            double magnitude = (1.0 / (a * a)) * (Math.Sin(a * alt + b) - a * alt * Math.Cos(a * alt + b));
-            // Subtract the value at x=0: (1/a²) * (sin(b) - 0 * cos(b)) = (1/a²) * sin(b)
-            magnitude -= (1.0 / (a * a)) * Math.Sin(b);
+            // Sort the vertices by distance
+            Array.Sort(vertices, (a, b) => a.distance.CompareTo(b.distance));
+            
+            if( Math.Abs( vertices[2].distance - vertices[0].distance ) < double.Epsilon ) {
+                // Area of the triangle
+                double area = 0.5 * Math.Abs(vertices[0].x * (vertices[1].y - vertices[2].y) + 
+                vertices[1].x * (vertices[2].y - vertices[0].y) + vertices[2].x * (vertices[0].y - vertices[1].y));
+                // Phase
+                double P0 = 2 * Math.PI * vertices[0].distance / lambda;
+                double P2 = 2 * Math.PI * vertices[2].distance / lambda;
+                double P = (P0 + P2) / 2;
+                return new Complex( area * Math.Cos( P ), area * Math.Sin( P ) );
+            }
 
-            return magnitude;
+            // Find a point along the line from vertices[0] to vertices[2] where the distance is equal to vertices[1].distance
+            double k = ( vertices[1].distance - vertices[0].distance ) / ( vertices[2].distance - vertices[0].distance );
+            double x = vertices[0].x + k * ( vertices[2].x - vertices[0].x );
+            double y = vertices[0].y + k * ( vertices[2].y - vertices[0].y );
+            double z = vertices[0].z + k * ( vertices[2].z - vertices[0].z );
+
+            // Devide the triangle into two along the line of equal distance
+            (double x, double y, double z, double distance)[] vertices1 = { 
+                (x, y, z, vertices[1].distance), 
+                vertices[0], 
+                vertices[1] 
+            };
+
+            (double x, double y, double z, double distance)[] vertices2 = { 
+                vertices[1], 
+                vertices[2], 
+                (x, y, z, vertices[1].distance)
+            };
+
+            return CalculateComplexIntegral(vertices1, lambda) + CalculateComplexIntegral(vertices2, lambda);
+        }
+        
+        private Complex CalculateComplexIntegral((double x, double y, double z, double distance)[] vertices, double lambda)
+        {
+            // Expecting that vertices[0] and vertices[2] are at the same distance
+            
+            // Area of the triangle
+            double area = 0.5 * Math.Abs(vertices[0].x * (vertices[1].y - vertices[2].y) + 
+                vertices[1].x * (vertices[2].y - vertices[0].y) + vertices[2].x * (vertices[0].y - vertices[1].y));
+            
+            // Phases at vertices[2] and vertices[0]
+            double P0 = 2 * Math.PI * vertices[0].distance / lambda;
+            double P1 = 2 * Math.PI * vertices[1].distance / lambda;
+
+            // Phase difference
+            double dP = P0 - P1; 
+            
+            // Handle the case where phases are nearly equal (dP ≈ 0)
+            if( Math.Abs( dP ) < double.Epsilon ) {
+                double P = (P0 + P1) / 2;
+                return new Complex( area * Math.Cos( P ), area * Math.Sin( P ) );
+            }
+
+            // Real part will be integral of x * cos( dP / alt * x  + P1 ) for x in [0, alt]
+            // Closed form solution: ∫ x * cos(ax + b) dx = (1/a²) * (cos(ax + b) + ax * sin(ax + b))
+
+            // Imaginary part will be integral of x * sin( dP / alt x + P1 ) for x in [0, alt]
+            // Closed form solution: ∫ x * sin(ax + b) dx = (1/a²) * (sin(ax + b) - ax * cos(ax + b))
+
+            // Where alt is the altitude of the tiangle to side [0,2], integration is along this altitude
+
+            double A = 2 * area / (dP * dP);
+            
+            double realPart = A * (Math.Cos(P0) - Math.Cos(P1) + dP * Math.Sin(P0) );
+            double imagPart = A * (Math.Sin(P0) - Math.Sin(P1) - dP * Math.Cos(P0) );
+
+            return new Complex(realPart, imagPart);
         }
         
         private double CalculateDistance3D(double x1, double y1, double z1, double x2, double y2, double z2)

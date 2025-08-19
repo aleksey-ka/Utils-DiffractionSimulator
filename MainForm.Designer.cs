@@ -143,6 +143,7 @@ namespace DiffractionSimulator
             // integrationSize_numericUpDown
             // 
             integrationSize_numericUpDown.Location = new Point(699, 582);
+            integrationSize_numericUpDown.Maximum = new decimal(new int[] { 500, 0, 0, 0 });
             integrationSize_numericUpDown.Minimum = new decimal(new int[] { 10, 0, 0, 65536 });
             integrationSize_numericUpDown.Name = "integrationSize_numericUpDown";
             integrationSize_numericUpDown.Size = new Size(80, 23);
@@ -223,47 +224,23 @@ namespace DiffractionSimulator
             sampling_label.ForeColor = Color.White;
             sampling_label.Location = new Point(800, 562);
             sampling_label.Name = "sampling_label";
-            sampling_label.Size = new Size(60, 15);
+            sampling_label.Size = new Size(57, 15);
             sampling_label.TabIndex = 14;
             sampling_label.Text = "Sampling";
             sampling_label.TextAlign = ContentAlignment.MiddleCenter;
             // 
-            // grid_label
+            // samplingComboBox
             // 
-            grid_label.AutoSize = true;
-            grid_label.ForeColor = Color.White;
-            grid_label.Location = new Point(880, 562);
-            grid_label.Name = "grid_label";
-            grid_label.Size = new Size(60, 15);
-            grid_label.TabIndex = 20;
-            grid_label.Text = "Grid";
-            grid_label.TextAlign = ContentAlignment.MiddleCenter;
-            // 
-            // gridComboBox
-            // 
-            gridComboBox.BackColor = Color.FromArgb(64, 64, 64);
-            gridComboBox.DropDownStyle = ComboBoxStyle.DropDownList;
-            gridComboBox.ForeColor = Color.White;
-            gridComboBox.FormattingEnabled = true;
-            gridComboBox.Items.AddRange(new object[] { "None", "Orthogonal" });
-            gridComboBox.Location = new Point(880, 582);
-            gridComboBox.Name = "gridComboBox";
-            gridComboBox.Size = new Size(80, 23);
-            gridComboBox.TabIndex = 21;
-            gridComboBox.SelectedIndexChanged += GridComboBox_SelectedIndexChanged;
-            // 
-            // triangularDiffractionButton
-            // 
-            triangularDiffractionButton.BackColor = Color.FromArgb(64, 64, 64);
-            triangularDiffractionButton.FlatStyle = FlatStyle.Flat;
-            triangularDiffractionButton.ForeColor = Color.White;
-            triangularDiffractionButton.Location = new Point(880, 650);
-            triangularDiffractionButton.Name = "triangularDiffractionButton";
-            triangularDiffractionButton.Size = new Size(120, 39);
-            triangularDiffractionButton.TabIndex = 22;
-            triangularDiffractionButton.Text = "Triangular Diffraction";
-            triangularDiffractionButton.UseVisualStyleBackColor = false;
-            triangularDiffractionButton.Click += TriangularDiffractionButton_Click;
+            samplingComboBox.BackColor = Color.FromArgb(64, 64, 64);
+            samplingComboBox.DropDownStyle = ComboBoxStyle.DropDownList;
+            samplingComboBox.ForeColor = Color.White;
+            samplingComboBox.FormattingEnabled = true;
+            samplingComboBox.Items.AddRange(new object[] { "0.5", "1.0", "2.0", "4.0", "8.0", "16.0", "32.0" });
+            samplingComboBox.Location = new Point(800, 582);
+            samplingComboBox.Name = "samplingComboBox";
+            samplingComboBox.Size = new Size(60, 23);
+            samplingComboBox.TabIndex = 16;
+            samplingComboBox.SelectedIndexChanged += SamplingComboBox_SelectedIndexChanged;
             // 
             // apertureShape_label
             // 
@@ -288,19 +265,6 @@ namespace DiffractionSimulator
             apertureShapeComboBox.Size = new Size(100, 23);
             apertureShapeComboBox.TabIndex = 15;
             apertureShapeComboBox.SelectedIndexChanged += ApertureShapeComboBox_SelectedIndexChanged;
-            // 
-            // samplingComboBox
-            // 
-            samplingComboBox.BackColor = Color.FromArgb(64, 64, 64);
-            samplingComboBox.DropDownStyle = ComboBoxStyle.DropDownList;
-            samplingComboBox.ForeColor = Color.White;
-            samplingComboBox.FormattingEnabled = true;
-            samplingComboBox.Items.AddRange(new object[] { "0.5", "1.0", "2.0", "4.0", "8.0", "16.0", "32.0" });
-            samplingComboBox.Location = new Point(800, 582);
-            samplingComboBox.Name = "samplingComboBox";
-            samplingComboBox.Size = new Size(60, 23);
-            samplingComboBox.TabIndex = 16;
-            samplingComboBox.SelectedIndexChanged += SamplingComboBox_SelectedIndexChanged;
             // 
             // apertureTitle_label
             // 
@@ -344,6 +308,43 @@ namespace DiffractionSimulator
             obstructionRatioNumericUpDown.TabIndex = 19;
             obstructionRatioNumericUpDown.Value = new decimal(new int[] { 300, 0, 0, 65536 });
             obstructionRatioNumericUpDown.ValueChanged += ObstructionRatioNumericUpDown_ValueChanged;
+            // 
+            // grid_label
+            // 
+            grid_label.AutoSize = true;
+            grid_label.ForeColor = Color.White;
+            grid_label.Location = new Point(880, 562);
+            grid_label.Name = "grid_label";
+            grid_label.Size = new Size(29, 15);
+            grid_label.TabIndex = 20;
+            grid_label.Text = "Grid";
+            grid_label.TextAlign = ContentAlignment.MiddleCenter;
+            // 
+            // gridComboBox
+            // 
+            gridComboBox.BackColor = Color.FromArgb(64, 64, 64);
+            gridComboBox.DropDownStyle = ComboBoxStyle.DropDownList;
+            gridComboBox.ForeColor = Color.White;
+            gridComboBox.FormattingEnabled = true;
+            gridComboBox.Items.AddRange(new object[] { "None", "Orthogonal" });
+            gridComboBox.Location = new Point(880, 582);
+            gridComboBox.Name = "gridComboBox";
+            gridComboBox.Size = new Size(80, 23);
+            gridComboBox.TabIndex = 21;
+            gridComboBox.SelectedIndexChanged += GridComboBox_SelectedIndexChanged;
+            // 
+            // triangularDiffractionButton
+            // 
+            triangularDiffractionButton.BackColor = Color.FromArgb(64, 64, 64);
+            triangularDiffractionButton.FlatStyle = FlatStyle.Flat;
+            triangularDiffractionButton.ForeColor = Color.White;
+            triangularDiffractionButton.Location = new Point(880, 650);
+            triangularDiffractionButton.Name = "triangularDiffractionButton";
+            triangularDiffractionButton.Size = new Size(120, 39);
+            triangularDiffractionButton.TabIndex = 22;
+            triangularDiffractionButton.Text = "Triangular Diffraction";
+            triangularDiffractionButton.UseVisualStyleBackColor = false;
+            triangularDiffractionButton.Click += TriangularDiffractionButton_Click;
             // 
             // MainForm
             // 
